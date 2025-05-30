@@ -245,6 +245,57 @@ class PSDDateUpdater:
             # Don't close Photoshop after analysis
             self.status.set("Analysis complete")
 
+    def _update_text_layer(self, text_item, today, time_part):
+        """Update a text layer with new date while keeping the time"""
+        try:
+            new_text = f"{today}\r{time_part}"
+            text_item.contents = new_text
+
+            # Verify if it worked
+            updated = text_item.contents
+            return "\r" in updated
+
+        except Exception as update_error:
+            self.status.set(f"Error updating text: {str(update_error)}")
+            return False
+
+    def _try_update_text_layer(self, text_item, today, time_part):
+        """Helper function to insert a line break using \r which is proven to work"""
+        try:
+            # Using the proven working method
+            new_text = f"{today}\r{time_part}"
+            text_item.contents = new_text
+
+            # Verify the change
+            updated = text_item.contents
+            if "\r" in updated:
+                parts = updated.split("\r")
+                if len(parts) > 1:
+                    self.results_text.insert(
+                        tk.END, f"\nSuccessfully updated text with line break\n"
+                    )
+                    self.status.set("Success! Used \\r line break")
+                    return True
+
+            return False
+
+            # Other methods kept for reference:
+            """
+            Alternative methods (not used):
+            - chr(13): f"{today}{chr(13)}{time_part}"
+            - ^p: f"{today}^p{time_part}"
+            - \n: f"{today}\n{time_part}"
+            - \r\n: f"{today}\r\n{time_part}"
+            - chr(13) concat: f"{today}" + chr(13) + time_part
+            - chr(10): f"{today}" + chr(10) + time_part
+            """
+
+        except Exception as e:
+            error_msg = f"Error in text update: {str(e)}"
+            self.status.set(error_msg)
+            self.results_text.insert(tk.END, f"\n{error_msg}\n")
+            return False
+
     def update_date(self):
         ps = None
         doc = None
@@ -278,28 +329,28 @@ class PSDDateUpdater:
 
                         # Try to split the text into date and time parts
                         try:
-                            parts = current_text.split()
+                            # First normalize any existing line breaks to spaces
+                            normalized_text = current_text.replace("\r", " ").replace(
+                                "\n", " "
+                            )
+                            parts = normalized_text.split()
+
                             if (
                                 len(parts) == 2 and ":" in parts[1]
                             ):  # Check if it has a time component
                                 time_part = parts[1]
-                                new_text = f"{today} {time_part}"
 
                                 self.status.set(
-                                    f"Updating layer {layer_name} from '{current_text}' to '{new_text}'"
+                                    f"Attempting to update layer {layer_name}..."
                                 )
-                                text_item.contents = new_text
-
-                                # Verify the change
-                                updated_text = text_item.contents
-                                if updated_text.strip() == new_text.strip():
+                                if self._update_text_layer(text_item, today, time_part):
                                     text_layers_updated = True
                                     self.status.set(
                                         f"Successfully updated layer: {layer_name}"
                                     )
                                 else:
                                     self.status.set(
-                                        f"Failed to update layer {layer_name} - text verification failed"
+                                        f"Failed to update layer {layer_name} - could not set line break"
                                     )
 
                         except Exception as update_error:
@@ -313,17 +364,22 @@ class PSDDateUpdater:
                     continue
 
             if text_layers_updated:
-                # Get file path from original document
-                file_path = doc.fullName
-                file_name, ext = os.path.splitext(file_path)
-                new_path = f"{file_name}_updated{ext}"
-
                 try:
-                    # Try to save the document
-                    doc.saveAs(new_path)
-                    self.status.set(
-                        f"Successfully saved to: {os.path.basename(new_path)}"
-                    )
+                    # Get file path from original document
+                    file_path = doc.fullName
+                    file_name, ext = os.path.splitext(file_path)
+
+                    # Create new Photoshop session to get save options
+                    with Session() as adobe:
+                        # Save as JPG using proper save options
+                        jpg_path = f"{file_name}_updated.jpg"
+                        options = adobe.JPEGSaveOptions(quality=12)  # Highest quality
+                        doc.saveAs(jpg_path, options, True)  # True = save as copy
+
+                        self.status.set(
+                            f"Successfully saved as JPG: {os.path.basename(jpg_path)}"
+                        )
+
                 except Exception as save_error:
                     raise Exception(f"Failed to save document: {str(save_error)}")
             else:

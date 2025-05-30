@@ -10,5 +10,6 @@ dependencies = [
     "pillow>=11.2.1",
     "scikit-image>=0.25.2",
     "imagehash>=4.3.1",
-    "photoshop-python-api>=0.24.1"
+    "photoshop-python-api>=0.24.1",
+    "pywin32>=306"
 ]
