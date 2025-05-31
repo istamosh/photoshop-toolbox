@@ -1,7 +1,7 @@
 """Main entry point for the application."""
 
 import tkinter as tk
-from reverse_image_finder.gui import App
+from .gui.app import App
 
 
 def main():
