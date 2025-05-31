@@ -5,6 +5,7 @@ from tkinter import ttk
 
 from .image_search import ImageSearchApp
 from .psd_updater import PSDDateUpdater
+from .date_stamper import DateStamperApp
 
 
 class App:
@@ -35,6 +36,7 @@ class App:
         menubar.add_cascade(label="Tools", menu=tools_menu)
         tools_menu.add_command(label="Image Finder", command=self.show_image_finder)
         tools_menu.add_command(label="PSD Date Updater", command=self.show_psd_updater)
+        tools_menu.add_command(label="Date Stamper", command=self.show_date_stamper)
         tools_menu.add_separator()
         tools_menu.add_command(label="Exit", command=self.root.quit)
 
@@ -45,6 +47,10 @@ class App:
     def show_psd_updater(self):
         self.clear_main_frame()
         PSDDateUpdater(self.main_frame)
+
+    def show_date_stamper(self):
+        self.clear_main_frame()
+        DateStamperApp(self.main_frame)
 
     def clear_main_frame(self):
         for widget in self.main_frame.winfo_children():
