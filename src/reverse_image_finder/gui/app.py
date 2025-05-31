@@ -1,16 +1,10 @@
-"""Main entry point for the Reverse Image Finder application."""
+"""Main application window and menu."""
 
 import tkinter as tk
-from tkinter import filedialog, ttk
-import imagehash
-from PIL import Image
-import os
-import threading
-import queue
-import time
-from datetime import datetime
-from photoshop import Session
-from photoshop.api._core import Photoshop
+from tkinter import ttk
+
+from .image_search import ImageSearchApp
+from .psd_updater import PSDDateUpdater
 
 
 class App:
@@ -46,27 +40,12 @@ class App:
 
     def show_image_finder(self):
         self.clear_main_frame()
-        from src.reverse_image_finder.gui.image_search import ImageSearchApp
-
         ImageSearchApp(self.main_frame)
 
     def show_psd_updater(self):
         self.clear_main_frame()
-        from src.reverse_image_finder.gui.psd_updater import PSDDateUpdater
-
         PSDDateUpdater(self.main_frame)
 
     def clear_main_frame(self):
         for widget in self.main_frame.winfo_children():
             widget.destroy()
-
-
-def main():
-    root = tk.Tk()
-    root.geometry("800x600")
-    app = App(root)
-    root.mainloop()
-
-
-if __name__ == "__main__":
-    main()

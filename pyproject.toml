@@ -1,7 +1,7 @@
 [project]
 name = "reverse-image-finder"
 version = "0.1.0"
-description = "Add your description here"
+description = "A tool for finding similar images and updating dates in PSD files"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -11,5 +11,5 @@ dependencies = [
     "scikit-image>=0.25.2",
     "imagehash>=4.3.1",
     "photoshop-python-api>=0.24.1",
-    "pywin32>=306"
+    "pywin32>=306",
 ]
