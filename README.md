@@ -1,6 +1,6 @@
-# Local Reverse Image Search
+# Photoshop Toolbox
 
-A Python application that performs local reverse image search using computer vision techniques.
+A collection of Python tools for image processing and Photoshop file manipulation.
 
 ## Setup
 

@@ -1,7 +1,7 @@
 [project]
-name = "reverse-image-finder"
+name = "photoshop-toolbox"
 version = "0.1.0"
-description = "A tool for finding similar images and updating dates in PSD files"
+description = "A collection of tools for image processing and Photoshop file manipulation"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
