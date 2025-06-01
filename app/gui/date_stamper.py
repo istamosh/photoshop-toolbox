@@ -1,12 +1,10 @@
-"""Module for adding date stamps to images using Photoshop."""
+"""Module for adding date stamps to images using Pillow."""
 
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 from datetime import datetime
 import os
-from PIL import Image
-from photoshop import Session
-from photoshop.api._core import Photoshop
+from PIL import Image, ImageDraw, ImageFont
 
 __all__ = ["DateStamperApp"]
 
@@ -28,104 +26,100 @@ class DateStamperApp:
         self.file_path_entry.pack(side="left", padx=(0, 5))
 
         self.browse_btn = ttk.Button(
-            convert_frame, text="Browse JPG", command=self.browse_jpg
+            convert_frame, text="Browse Image", command=self.browse_image
         )
         self.browse_btn.pack(side="left", padx=5)
 
-        self.convert_btn = ttk.Button(
-            convert_frame, text="Add Date Stamp", command=self.convert_to_psd
+        self.stamp_btn = ttk.Button(
+            convert_frame, text="Add Date Stamp", command=self.add_date_stamp
         )
-        self.convert_btn.pack(side="left")
+        self.stamp_btn.pack(side="left")
 
         # Status Label
         self.status_label = ttk.Label(self.parent, text="")
         self.status_label.pack(pady=5)
 
-    def convert_to_psd(self):
-        """Convert JPG to PSD and add date/time text layer."""
+    def add_date_stamp(self):
+        """Add date/time stamp to image and save as JPEG."""
         if not self.file_path_var.get():
-            messagebox.showerror("Error", "Please select a JPG file first")
+            messagebox.showerror("Error", "Please select an image file first")
             return
 
         try:
-            jpg_path = self.file_path_var.get()
-            psd_path = os.path.splitext(jpg_path)[0] + ".psd"
+            # Open original image
+            input_path = self.file_path_var.get()
+            img = Image.open(input_path)
+
+            # Convert to RGB if necessary
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+
+            # Create draw object
+            draw = ImageDraw.Draw(img)
+
+            # Calculate text size and position
+            width, height = img.size
+            min_dimension = min(width, height)
+            font_size = int(min_dimension * 0.03)  # 3% of shorter dimension
+
+            # Try to use Arial, fall back to default if not available
+            try:
+                font = ImageFont.truetype("arial.ttf", font_size)
+            except:
+                font = ImageFont.load_default()
+
+            # Format date and time
             current_date = datetime.now().strftime("%d-%m-%Y")
             current_time = datetime.now().strftime("%H:%M")
+            date_text = f"{current_date}\n{current_time}"
 
-            # Open Photoshop and create new document from JPG
-            with Session() as ps:
-                app = ps.app
-                doc = app.open(jpg_path)
+            # Calculate text position
+            margin = int(min_dimension * 0.02)  # 2% margin
+            text_bbox = draw.textbbox((0, 0), date_text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
 
-                # Get document dimensions
-                width = doc.width
-                height = doc.height
+            x = width - text_width - margin
+            y = height - text_height - margin
 
-                # Create text layer with proper formatting
-                text_layer = doc.artLayers.add()
-                text_layer.kind = 2  # TextLayer
-                text_item = text_layer.textItem
+            # Draw text shadow/outline for better visibility
+            offset = max(1, int(font_size * 0.05))  # Outline thickness
+            for dx, dy in [
+                (-offset, -offset),
+                (-offset, offset),
+                (offset, -offset),
+                (offset, offset),
+            ]:
+                draw.text((x + dx, y + dy), date_text, font=font, fill="white")
 
-                # Set font properties
-                try:
-                    text_item.font = "Arial MT"  # Try Arial MT first
-                except Exception:
-                    try:
-                        text_item.font = "Arial"  # Fall back to regular Arial
-                    except Exception:
-                        pass  # Keep default font if Arial is not available
+            # Draw main text
+            draw.text((x, y), date_text, font=font, fill="black")
 
-                # Dynamic sizing and positioning
-                text_size = min(width, height) * 0.03  # 3% of shorter dimension
-                text_item.size = text_size
-                text_item.justification = 2  # Right-aligned
+            # Create output filename with date stamp
+            file_dir = os.path.dirname(input_path)
+            file_name = os.path.basename(input_path)
+            name, ext = os.path.splitext(file_name)
+            date_str = datetime.now().strftime("%y%m%d")
+            output_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
 
-                # Format date and time on separate lines
-                text_item.contents = f"{current_date}\r{current_time}"
-
-                # Set initial position to force text bounds calculation
-                text_item.position = [0, 0]
-
-                # Get the text bounds to calculate proper position
-                bounds = text_layer.bounds
-                text_width = bounds[2] - bounds[0]
-                text_height = bounds[3] - bounds[1]
-
-                # Position in bottom right with margin
-                margin_x = width * 0.02  # 2% margin
-                margin_y = height * 0.02
-                text_item.position = [
-                    width - margin_x - text_width,
-                    height - margin_y - text_height,
-                ]
-
-                # Set text color to black
-                text_color = ps.SolidColor()
-                text_color.rgb.red = 0
-                text_color.rgb.green = 0
-                text_color.rgb.blue = 0
-                text_item.color = text_color
-
-                # Save as PSD
-                options = ps.PhotoshopSaveOptions()
-                doc.saveAs(psd_path, options, True)
-                doc.close()
+            # Save the image with high quality
+            img.save(output_path, "JPEG", quality=95)
 
             self.status_label.config(
-                text=f"Successfully added date stamp to: {os.path.basename(psd_path)}",
+                text=f"Successfully saved image with date stamp: {os.path.basename(output_path)}",
                 foreground="green",
             )
+
         except Exception as e:
             self.status_label.config(
                 text=f"Error adding date stamp: {str(e)}", foreground="red"
             )
 
-    def browse_jpg(self):
-        """Open file dialog to select a JPG file."""
-        filetypes = [("JPEG files", "*.jpg;*.jpeg")]
+    def browse_image(self):
+        """Open file dialog to select an image file."""
+        filetypes = [("Image files", "*.jpg;*.jpeg;*.png;*.bmp")]
         filename = filedialog.askopenfilename(
-            title="Select JPG File", filetypes=filetypes
+            title="Select Image File", filetypes=filetypes
         )
         if filename:
             self.file_path_var.set(filename)
