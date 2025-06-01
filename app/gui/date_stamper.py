@@ -15,6 +15,8 @@ class DateStamperApp:
         self.parent = parent
         self.start_hour = tk.IntVar(value=7)  # Default start hour
         self.end_hour = tk.IntVar(value=10)  # Default end hour
+        self.last_minute = None  # Track last used minute
+        self.current_hour = None  # Track current hour for batch processing
         self.setup_ui()
 
     def setup_ui(self):
@@ -22,7 +24,7 @@ class DateStamperApp:
         convert_frame = ttk.LabelFrame(self.parent, text="Date Stamper", padding="10")
         convert_frame.pack(fill="x", padx=5, pady=5)
 
-        # File selection
+        # File selection frame
         file_frame = ttk.Frame(convert_frame)
         file_frame.pack(fill="x", pady=(0, 10))
 
@@ -32,10 +34,19 @@ class DateStamperApp:
         )
         self.file_path_entry.pack(side="left", padx=(0, 5))
 
+        # Add buttons frame
+        button_frame = ttk.Frame(file_frame)
+        button_frame.pack(side="left")
+
         self.browse_btn = ttk.Button(
-            file_frame, text="Browse Image", command=self.browse_image
+            button_frame, text="Browse Image", command=self.browse_image
         )
         self.browse_btn.pack(side="left", padx=5)
+
+        self.browse_batch_btn = ttk.Button(
+            button_frame, text="Browse Folder", command=self.browse_folder
+        )
+        self.browse_batch_btn.pack(side="left", padx=5)
 
         # Time range frame
         time_frame = ttk.LabelFrame(convert_frame, text="Time Adjustment", padding="5")
@@ -58,37 +69,122 @@ class DateStamperApp:
 
         ttk.Label(time_frame, text="hours").pack(side="left", padx=5)
 
-        # Add Date Stamp button
+        # Process buttons frame
+        process_frame = ttk.Frame(convert_frame)
+        process_frame.pack(pady=(0, 5))
+
         self.stamp_btn = ttk.Button(
-            convert_frame, text="Add Date Stamp", command=self.add_date_stamp
+            process_frame, text="Add Date Stamp", command=self.add_date_stamp
         )
-        self.stamp_btn.pack(pady=(0, 5))
+        self.stamp_btn.pack(side="left", padx=5)
+
+        self.batch_stamp_btn = ttk.Button(
+            process_frame, text="Process Folder", command=self.process_folder
+        )
+        self.batch_stamp_btn.pack(side="left", padx=5)
 
         # Status Label
         self.status_label = ttk.Label(self.parent, text="")
         self.status_label.pack(pady=5)
 
-    def adjust_time(self, current_hour, current_minute):
-        """Adjust time if it's after 11:00."""
-        if current_hour >= 11:
+    def adjust_time(self, input_hour, input_minute):
+        """Adjust time with sequential minutes."""
+        # Initialize time tracking if this is the first image
+        if self.last_minute is None:
+            self.last_minute = (
+                input_minute - 1
+            )  # Start one minute before so first increment matches input
+            if input_hour >= 11:
+                start = self.start_hour.get()
+                end = self.end_hour.get()
+                if start > end:
+                    start, end = end, start
+                self.current_hour = random.randint(start, end)
+            else:
+                self.current_hour = input_hour
+
+        # Increment minute for each image
+        self.last_minute = (self.last_minute + 1) % 60
+
+        # If minutes roll over or we're past 11:00, possibly get new hour
+        if self.last_minute == 0 or (input_hour >= 11 and self.current_hour is None):
             start = self.start_hour.get()
             end = self.end_hour.get()
-            # Ensure valid range
             if start > end:
                 start, end = end, start
-            adjusted_hour = random.randint(start, end)
-            return f"{adjusted_hour:02d}:{current_minute:02d}"
-        return f"{current_hour:02d}:{current_minute:02d}"
+            self.current_hour = random.randint(start, end)
 
-    def add_date_stamp(self):
-        """Add date/time stamp to image and save as JPEG."""
+        # Use randomized hour if after 11:00, otherwise use input hour
+        display_hour = self.current_hour if input_hour >= 11 else input_hour
+        return f"{display_hour:02d}:{self.last_minute:02d}"
+
+    def browse_folder(self):
+        """Open folder dialog to select a directory of images."""
+        folder = filedialog.askdirectory(title="Select Folder with Images")
+        if folder:
+            self.file_path_var.set(folder)
+            self.status_label.config(
+                text=f"Selected folder: {os.path.basename(folder)}", foreground="black"
+            )
+
+    def process_folder(self):
+        """Process all images in the selected folder."""
         if not self.file_path_var.get():
-            messagebox.showerror("Error", "Please select an image file first")
+            messagebox.showerror("Error", "Please select a folder first")
             return
 
+        folder_path = self.file_path_var.get()
+        if not os.path.isdir(folder_path):
+            messagebox.showerror("Error", "Please select a valid folder")
+            return
+
+        # Reset time tracking for new batch
+        self.last_minute = None
+        self.current_hour = None
+        processed_count = 0
+        error_count = 0
+
+        # Get list of image files
+        image_files = [
+            f
+            for f in os.listdir(folder_path)
+            if f.lower().endswith((".jpg", ".jpeg", ".png", ".bmp"))
+        ]
+
+        if not image_files:
+            messagebox.showinfo("Info", "No image files found in the selected folder")
+            return
+
+        # Sort files to ensure consistent order
+        image_files.sort()
+
+        # Process each image
+        for filename in image_files:
+            input_path = os.path.join(folder_path, filename)
+            try:
+                self.process_single_image(input_path)
+                processed_count += 1
+                self.status_label.config(
+                    text=f"Processing: {processed_count}/{len(image_files)} - {filename}",
+                    foreground="black",
+                )
+                self.parent.update()  # Update UI
+            except Exception as e:
+                error_count += 1
+                print(f"Error processing {filename}: {str(e)}")
+
+        # Final status update
+        status = f"Completed: {processed_count} images processed"
+        if error_count > 0:
+            status += f", {error_count} errors"
+        self.status_label.config(
+            text=status, foreground="green" if error_count == 0 else "red"
+        )
+
+    def process_single_image(self, input_path):
+        """Process a single image file."""
         try:
             # Open original image
-            input_path = self.file_path_var.get()
             img = Image.open(input_path)
 
             # Convert to RGB if necessary
@@ -115,7 +211,7 @@ class DateStamperApp:
             adjusted_time = self.adjust_time(now.hour, now.minute)
             date_text = f"{current_date}\n{adjusted_time}"
 
-            # Calculate text position with increased margins
+            # Calculate text position with margins
             margin_x = int(min_dimension * 0.05)  # 5% horizontal margin
             margin_y = int(min_dimension * 0.06)  # 6% vertical margin
 
@@ -153,20 +249,36 @@ class DateStamperApp:
             file_dir = os.path.dirname(input_path)
             file_name = os.path.basename(input_path)
             name, ext = os.path.splitext(file_name)
-            date_str = datetime.now().strftime("%y%m%d")
+            date_str = now.strftime("%y%m%d")
             output_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
 
             # Save the image with high quality
             img.save(output_path, "JPEG", quality=95)
 
+            return output_path
+
+        except Exception as e:
+            raise Exception(f"Error processing image: {str(e)}")
+
+    def add_date_stamp(self):
+        """Add date/time stamp to single image and save as JPEG."""
+        if not self.file_path_var.get():
+            messagebox.showerror("Error", "Please select an image file first")
+            return
+
+        try:
+            # Reset time tracking for single image
+            self.last_minute = None
+            self.current_hour = None
+            output_path = self.process_single_image(self.file_path_var.get())
             self.status_label.config(
                 text=f"Successfully saved image with date stamp: {os.path.basename(output_path)}",
                 foreground="green",
             )
-
         except Exception as e:
             self.status_label.config(
-                text=f"Error adding date stamp: {str(e)}", foreground="red"
+                text=f"Error adding date stamp: {str(e)}",
+                foreground="red",
             )
 
     def browse_image(self):
