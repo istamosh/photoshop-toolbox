@@ -424,8 +424,10 @@ class PSDDateUpdater:
             new_jpg_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
             ver2_jpg_path = os.path.join(file_dir, f"{date_str}_{name}_ver2.jpg")
 
-            # Track which datetime layer might have a Type 17 layer behind it
+            # Track which datetime layer might have a Type 17 layer near it
             datetime_layer_with_type17 = None
+            type17_layer = None
+            type17_position = None
 
             with Session() as ps:
                 # Save as PSD
@@ -436,47 +438,45 @@ class PSDDateUpdater:
                 jpg_options = ps.JPEGSaveOptions(quality=12)  # Highest quality
                 doc.saveAs(new_jpg_path, jpg_options, True)
 
-                # Check for Type 17 layers behind datetime layers
+                # Check for Type 17 layers near datetime layers
                 for layer in doc.artLayers:
                     try:
-                        if hasattr(layer, 'textItem') and layer.textItem:
-                            if self._has_type17_behind_datetime(doc, layer):
+                        if hasattr(layer, "textItem") and layer.textItem:
+                            has_type17, found_layer, position = (
+                                self._has_type17_near_datetime(doc, layer)
+                            )
+                            if has_type17:
                                 datetime_layer_with_type17 = layer
+                                type17_layer = found_layer
+                                type17_position = position
                                 break
                     except:
                         continue
 
                 # If a Type 17 layer is found, create ver2 JPG with it hidden
-                if datetime_layer_with_type17:
-                    # Remember the original visibility of the Type 17 layer
-                    type17_layer = None
-                    for layer in doc.artLayers:
-                        if layer == datetime_layer_with_type17:
-                            continue
-                        if layer.kind == 17:
-                            type17_layer = layer
-                            original_visibility = layer.visible
-                            layer.visible = False
-                            break
+                if datetime_layer_with_type17 and type17_layer:
+                    # Remember the original visibility
+                    original_visibility = type17_layer.visible
+                    type17_layer.visible = False
 
                     # Save ver2 JPG
                     doc.saveAs(ver2_jpg_path, jpg_options, True)
 
                     # Restore original visibility
-                    if type17_layer:
-                        type17_layer.visible = original_visibility
+                    type17_layer.visible = original_visibility
 
                     self.status.set(
                         f"Saved as: {os.path.basename(new_psd_path)}, "
                         f"{os.path.basename(new_jpg_path)}, and "
-                        f"{os.path.basename(ver2_jpg_path)}"
+                        f"{os.path.basename(ver2_jpg_path)} "
+                        f"(Type 17 layer {type17_position} datetime hidden)"
                     )
                 else:
                     self.status.set(
                         f"Saved as: {os.path.basename(new_psd_path)} and "
                         f"{os.path.basename(new_jpg_path)}"
                     )
-                    
+
         except Exception as save_error:
             raise Exception(f"Failed to save document: {str(save_error)}")
 
@@ -548,6 +548,31 @@ class PSDDateUpdater:
                 self.results_text.insert(tk.END, f"  {prop.capitalize()}: {value}\n")
             except:
                 pass
+
+    def _has_type17_near_datetime(self, doc, datetime_layer):
+        """Check if there's a Type 17 layer above or below the datetime layer."""
+        try:
+            layers = list(doc.artLayers)
+            found_datetime = False
+
+            # First check layers above the datetime layer
+            for layer in reversed(layers):
+                if layer == datetime_layer:
+                    break
+                elif layer.kind == 17:
+                    return True, layer, "above"
+
+            # Then check layers below the datetime layer
+            for layer in layers:
+                if layer == datetime_layer:
+                    found_datetime = True
+                elif found_datetime and layer.kind == 17:
+                    return True, layer, "below"
+
+            return False, None, None
+        except Exception as e:
+            self.status.set(f"Error checking Type 17 layers: {str(e)}")
+            return False, None, None
 
     def _process_layers(self, doc, today):
         """Process all layers in the document for date updates."""
@@ -558,201 +583,76 @@ class PSDDateUpdater:
 
         self.status.set(f"Processing {len(layers)} layers...")
         text_layers_updated = False
+        has_type17_above_datetime = False
+        type17_layer = None
+        datetime_layer = None
 
-        for layer in layers:
+        # First pass: analyze layer structure
+        for i, layer in enumerate(layers):
             try:
-                if self._process_text_layer(layer, today):
-                    text_layers_updated = True
+                if hasattr(layer, "textItem") and layer.textItem:
+                    current_text = layer.textItem.contents
+                    if "\r" in current_text or "\n" in current_text:
+                        datetime_layer = layer
+                        # Check if the previous layer is Type 17
+                        if i > 0 and layers[i - 1].kind == 17:
+                            has_type17_above_datetime = True
+                            type17_layer = layers[i - 1]
+                if datetime_layer and type17_layer:
+                    break
             except Exception:
                 continue
 
-        return text_layers_updated
-
-    def _process_text_layer(self, layer, today):
-        """Process a single text layer for date update."""
-        try:
-            text_item = layer.textItem
-            if not text_item:
-                return False
-
-            layer_name = layer.name
-            current_text = text_item.contents
-
-            # Try to split the text into date and time parts
-            normalized_text = current_text.replace("\r", " ").replace("\n", " ")
-            parts = normalized_text.split()
-
-            if len(parts) == 2 and ":" in parts[1]:
-                time_part = parts[1]
-                self.status.set(f"Attempting to update layer {layer_name}...")
-
-                if self._update_text_layer(text_item, today, time_part):
-                    self.status.set(f"Successfully updated layer: {layer_name}")
-                    return True
-                else:
-                    self.status.set(
-                        f"Failed to update layer {layer_name} - could not set line break"
-                    )
-
-            return False
-
-        except Exception as update_error:
-            self.status.set(f"Error updating layer {layer_name}: {str(update_error)}")
-            return False
-
-    def _save_document(self, doc):
-        """Save the document as both PSD and JPG with date prefix."""
-        try:
-            # Get original file path and create new paths with date prefix
-            original_path = doc.fullName
-            file_dir = os.path.dirname(original_path)
-            file_name = os.path.basename(original_path)
-            name, ext = os.path.splitext(file_name)
-
-            # Create date prefix (YYMMDD)
-            date_str = datetime.now().strftime("%y%m%d")
-
-            # Create new filenames
-            new_psd_path = os.path.join(file_dir, f"{date_str}_{name}.psd")
-            new_jpg_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
-            ver2_jpg_path = os.path.join(file_dir, f"{date_str}_{name}_ver2.jpg")
-
-            # Track which datetime layer might have a Type 17 layer behind it
-            datetime_layer_with_type17 = None
-
-            with Session() as ps:
-                # Save as PSD
-                options = ps.PhotoshopSaveOptions()
-                doc.saveAs(new_psd_path, options, True)  # True = save as copy
-
-                # First JPG
-                jpg_options = ps.JPEGSaveOptions(quality=12)  # Highest quality
-                doc.saveAs(new_jpg_path, jpg_options, True)
-
-                # Check for Type 17 layers behind datetime layers
-                for layer in doc.artLayers:
-                    try:
-                        if hasattr(layer, 'textItem') and layer.textItem:
-                            if self._has_type17_behind_datetime(doc, layer):
-                                datetime_layer_with_type17 = layer
-                                break
-                    except:
-                        continue
-
-                # If a Type 17 layer is found, create ver2 JPG with it hidden
-                if datetime_layer_with_type17:
-                    # Remember the original visibility of the Type 17 layer
-                    type17_layer = None
-                    for layer in doc.artLayers:
-                        if layer == datetime_layer_with_type17:
-                            continue
-                        if layer.kind == 17:
-                            type17_layer = layer
-                            original_visibility = layer.visible
-                            layer.visible = False
-                            break
-
-                    # Save ver2 JPG
-                    doc.saveAs(ver2_jpg_path, jpg_options, True)
-
-                    # Restore original visibility
-                    if type17_layer:
-                        type17_layer.visible = original_visibility
-
-                    self.status.set(
-                        f"Saved as: {os.path.basename(new_psd_path)}, "
-                        f"{os.path.basename(new_jpg_path)}, and "
-                        f"{os.path.basename(ver2_jpg_path)}"
-                    )
-                else:
-                    self.status.set(
-                        f"Saved as: {os.path.basename(new_psd_path)} and "
-                        f"{os.path.basename(new_jpg_path)}"
-                    )
-                    
-        except Exception as save_error:
-            raise Exception(f"Failed to save document: {str(save_error)}")
-
-    def _analyze_document_info(self, doc):
-        """Analyze and display document information."""
-        doc_name = doc.name
-        doc_path = doc.fullName
-        doc_width = doc.width
-        doc_height = doc.height
-        self.results_text.insert(tk.END, f"Name: {doc_name}\n")
-        self.results_text.insert(tk.END, f"Path: {doc_path}\n")
-        self.results_text.insert(tk.END, f"Size: {doc_width} x {doc_height}\n\n")
-
-    def _analyze_layers(self, doc):
-        """Analyze and display layer information."""
-        layers = list(doc.artLayers)
-        self.results_text.insert(
-            tk.END, f"=== Layer Analysis ({len(layers)} layers) ===\n\n"
-        )
-
+        # Second pass: process text layers
         for layer in layers:
             try:
-                self._analyze_single_layer(layer)
-            except Exception as layer_error:
-                error_info = (
-                    f"Error analyzing layer: {str(layer_error)}\n" + "-" * 50 + "\n"
-                )
-                self.results_text.insert(tk.END, error_info)
-                self.status.set(f"Error in layer analysis: {str(layer_error)}")
+                if hasattr(layer, "textItem"):
+                    text_item = layer.textItem
+                    if not text_item:
+                        continue
+
+                    current_text = text_item.contents
+
+                    # Try to split the text into date and time parts
+                    normalized_text = current_text.replace("\r", " ").replace("\n", " ")
+                    parts = normalized_text.split()
+
+                    if len(parts) == 2 and ":" in parts[1]:
+                        time_part = parts[1]
+                        if self._update_text_layer(text_item, today, time_part):
+                            text_layers_updated = True
+
+            except Exception as update_error:
+                self.status.set(f"Error updating layer: {str(update_error)}")
                 continue
 
-        self.results_text.insert(tk.END, "\nAnalysis complete!")
-        self.status.set("Layer analysis complete")
-
-    def _analyze_single_layer(self, layer):
-        """Analyze and display information for a single layer."""
-        layer_name = layer.name
-        layer_kind = layer.kind
-        layer_visible = "Unknown"
-        try:
-            layer_visible = "Visible" if layer.visible else "Hidden"
-        except:
-            pass
-
-        self.results_text.insert(tk.END, f"Layer: {layer_name}\n")
-        self.results_text.insert(tk.END, f"Type: {layer_kind}\n")
-        self.results_text.insert(tk.END, f"Status: {layer_visible}\n")
-
-        # Try to analyze text properties if it's a text layer
-        try:
-            self._analyze_text_properties(layer)
-        except Exception:
-            pass
-
-        self.results_text.insert(tk.END, "-" * 50 + "\n")
-        self.results_text.see(tk.END)  # Scroll to latest
-        self.status.set(f"Analyzed layer: {layer_name}")
-
-    def _analyze_text_properties(self, layer):
-        """Analyze and display text properties for a text layer."""
-        text_item = layer.textItem
-        text_content = text_item.contents
-        self.results_text.insert(tk.END, "Text Properties:\n")
-        self.results_text.insert(tk.END, f"  Content: {text_content}\n")
-
-        for prop in ["font", "size", "justification"]:
+        # If we found a Type 17 layer above datetime, save additional rev2 JPG
+        if has_type17_above_datetime and type17_layer and datetime_layer:
             try:
-                value = getattr(text_item, prop)
-                self.results_text.insert(tk.END, f"  {prop.capitalize()}: {value}\n")
-            except:
-                pass
+                # Save rev2 version with Type 17 layer hidden
+                original_visibility = type17_layer.visible
+                type17_layer.visible = False
 
-    def _has_type17_behind_datetime(self, doc, datetime_layer):
-        """Check if there's a Type 17 layer behind the datetime layer."""
-        try:
-            layers = list(doc.artLayers)
-            found_datetime = False
-            for layer in layers:
-                if layer == datetime_layer:
-                    found_datetime = True
-                elif found_datetime and layer.kind == 17:
-                    return True
-            return False
-        except Exception as e:
-            self.status.set(f"Error checking Type 17 layers: {str(e)}")
-            return False
+                # Get original file path and create rev2 path
+                original_path = doc.fullName
+                file_dir = os.path.dirname(original_path)
+                file_name = os.path.basename(original_path)
+                name, ext = os.path.splitext(file_name)
+                date_str = datetime.now().strftime("%y%m%d")
+                rev2_jpg_path = os.path.join(file_dir, f"{date_str}_{name}_rev2.jpg")
+
+                # Save rev2 JPG
+                with Session() as ps:
+                    jpg_options = ps.JPEGSaveOptions(quality=12)
+                    doc.saveAs(rev2_jpg_path, jpg_options, True)
+
+                # Restore visibility
+                type17_layer.visible = original_visibility
+
+                self.status.set(
+                    f"Created rev2 version with hidden Type 17 layer: {os.path.basename(rev2_jpg_path)}"
+                )
+            except Exception as rev2_error:
+                self.status.set(f"Error creating rev2 version: {str(rev2_error)}")
+
+        return text_layers_updated
