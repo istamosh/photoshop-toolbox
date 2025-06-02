@@ -424,11 +424,6 @@ class PSDDateUpdater:
             new_jpg_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
             ver2_jpg_path = os.path.join(file_dir, f"{date_str}_{name}_ver2.jpg")
 
-            # Track which datetime layer might have a Type 17 layer near it
-            datetime_layer_with_type17 = None
-            type17_layer = None
-            type17_position = None
-
             with Session() as ps:
                 # Save as PSD
                 options = ps.PhotoshopSaveOptions()
@@ -438,44 +433,38 @@ class PSDDateUpdater:
                 jpg_options = ps.JPEGSaveOptions(quality=12)  # Highest quality
                 doc.saveAs(new_jpg_path, jpg_options, True)
 
-                # Check for Type 17 layers near datetime layers
+                # Check for Type 17 layers above datetime layers
                 for layer in doc.artLayers:
                     try:
                         if hasattr(layer, "textItem") and layer.textItem:
                             has_type17, found_layer, position = (
                                 self._has_type17_near_datetime(doc, layer)
                             )
-                            if has_type17:
-                                datetime_layer_with_type17 = layer
-                                type17_layer = found_layer
-                                type17_position = position
-                                break
+                            if has_type17 and found_layer:
+                                # Remember the original visibility
+                                original_visibility = found_layer.visible
+                                found_layer.visible = False
+
+                                # Save ver2 JPG
+                                doc.saveAs(ver2_jpg_path, jpg_options, True)
+
+                                # Restore original visibility
+                                found_layer.visible = original_visibility
+
+                                self.status.set(
+                                    f"Saved as: {os.path.basename(new_psd_path)}, "
+                                    f"{os.path.basename(new_jpg_path)}, and "
+                                    f"{os.path.basename(ver2_jpg_path)} "
+                                    f"(Type 17 layer {position} datetime hidden)"
+                                )
+                                return
                     except:
                         continue
 
-                # If a Type 17 layer is found, create ver2 JPG with it hidden
-                if datetime_layer_with_type17 and type17_layer:
-                    # Remember the original visibility
-                    original_visibility = type17_layer.visible
-                    type17_layer.visible = False
-
-                    # Save ver2 JPG
-                    doc.saveAs(ver2_jpg_path, jpg_options, True)
-
-                    # Restore original visibility
-                    type17_layer.visible = original_visibility
-
-                    self.status.set(
-                        f"Saved as: {os.path.basename(new_psd_path)}, "
-                        f"{os.path.basename(new_jpg_path)}, and "
-                        f"{os.path.basename(ver2_jpg_path)} "
-                        f"(Type 17 layer {type17_position} datetime hidden)"
-                    )
-                else:
-                    self.status.set(
-                        f"Saved as: {os.path.basename(new_psd_path)} and "
-                        f"{os.path.basename(new_jpg_path)}"
-                    )
+            self.status.set(
+                f"Saved as: {os.path.basename(new_psd_path)} and "
+                f"{os.path.basename(new_jpg_path)}"
+            )
 
         except Exception as save_error:
             raise Exception(f"Failed to save document: {str(save_error)}")
@@ -550,24 +539,16 @@ class PSDDateUpdater:
                 pass
 
     def _has_type17_near_datetime(self, doc, datetime_layer):
-        """Check if there's a Type 17 layer above or below the datetime layer."""
+        """Check if there's a Type 17 layer above the datetime layer."""
         try:
             layers = list(doc.artLayers)
-            found_datetime = False
 
-            # First check layers above the datetime layer
+            # Only check layers above the datetime layer
             for layer in reversed(layers):
                 if layer == datetime_layer:
                     break
                 elif layer.kind == 17:
                     return True, layer, "above"
-
-            # Then check layers below the datetime layer
-            for layer in layers:
-                if layer == datetime_layer:
-                    found_datetime = True
-                elif found_datetime and layer.kind == 17:
-                    return True, layer, "below"
 
             return False, None, None
         except Exception as e:
@@ -625,34 +606,5 @@ class PSDDateUpdater:
             except Exception as update_error:
                 self.status.set(f"Error updating layer: {str(update_error)}")
                 continue
-
-        # If we found a Type 17 layer above datetime, save additional rev2 JPG
-        if has_type17_above_datetime and type17_layer and datetime_layer:
-            try:
-                # Save rev2 version with Type 17 layer hidden
-                original_visibility = type17_layer.visible
-                type17_layer.visible = False
-
-                # Get original file path and create rev2 path
-                original_path = doc.fullName
-                file_dir = os.path.dirname(original_path)
-                file_name = os.path.basename(original_path)
-                name, ext = os.path.splitext(file_name)
-                date_str = datetime.now().strftime("%y%m%d")
-                rev2_jpg_path = os.path.join(file_dir, f"{date_str}_{name}_rev2.jpg")
-
-                # Save rev2 JPG
-                with Session() as ps:
-                    jpg_options = ps.JPEGSaveOptions(quality=12)
-                    doc.saveAs(rev2_jpg_path, jpg_options, True)
-
-                # Restore visibility
-                type17_layer.visible = original_visibility
-
-                self.status.set(
-                    f"Created rev2 version with hidden Type 17 layer: {os.path.basename(rev2_jpg_path)}"
-                )
-            except Exception as rev2_error:
-                self.status.set(f"Error creating rev2 version: {str(rev2_error)}")
 
         return text_layers_updated
