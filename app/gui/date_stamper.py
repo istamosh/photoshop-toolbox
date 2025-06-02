@@ -196,7 +196,9 @@ class DateStamperApp:
                 )
                 if output_folder:
                     folder_num = os.path.basename(output_folder)
-                    status_msg += f" (Output folder: {folder_num})"
+                    status_msg += (
+                        f" (Output folder: {folder_num}, originals in Raw subfolder)"
+                    )
                 self.status_label.config(
                     text=status_msg,
                     foreground="black",
@@ -209,9 +211,7 @@ class DateStamperApp:
         # Final status update
         if output_folder:
             folder_num = os.path.basename(output_folder)
-            status = (
-                f"Completed: {processed_count} images processed in folder {folder_num}"
-            )
+            status = f"Completed: {processed_count} images processed in folder {folder_num} (originals in {folder_num}/Raw)"
         else:
             status = f"Completed: {processed_count} images processed in source location"
         if error_count > 0:
@@ -277,21 +277,25 @@ class DateStamperApp:
                     fill="white",
                     align="right",
                     anchor="ra",
-                )
+                )  # Determine output directory and save original
+            if output_folder:
+                # Create Raw subfolder for original files
+                raw_dir = os.path.join(output_folder, "Raw")
+                os.makedirs(raw_dir, exist_ok=True)
+
+                # First save the unprocessed original image to Raw folder
+                file_name = os.path.basename(input_path)
+                with Image.open(input_path) as original_img:
+                    raw_path = os.path.join(raw_dir, file_name)
+                    original_img.save(raw_path, quality=95)
 
             # Draw main text
             draw.text(
                 (x, y), date_text, font=font, fill="black", align="right", anchor="ra"
             )
 
-            # Determine output directory
-            if output_folder:
-                save_dir = output_folder
-            else:
-                save_dir = os.path.dirname(input_path)
-
-            # Create output filename with date stamp
-            file_name = os.path.basename(input_path)
+            # Save the date-stamped version in the main folder
+            save_dir = output_folder if output_folder else os.path.dirname(input_path)
             name, ext = os.path.splitext(file_name)
             date_str = now.strftime("%y%m%d")
             output_path = os.path.join(save_dir, f"{date_str}_{name}.jpg")
@@ -333,7 +337,7 @@ class DateStamperApp:
             if output_folder:
                 folder_num = os.path.basename(output_folder)
                 self.status_label.config(
-                    text=f"Successfully saved image in folder {folder_num}: {os.path.basename(output_path)}",
+                    text=f"Successfully saved image in folder {folder_num} (original in {folder_num}/Raw): {os.path.basename(output_path)}",
                     foreground="green",
                 )
             else:
