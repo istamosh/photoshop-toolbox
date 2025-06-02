@@ -14,6 +14,7 @@ class PSDDateUpdater:
         self.parent = parent
         self.status = tk.StringVar(value="Ready")
         self.psd_file_path = tk.StringVar()
+        self.output_dir = tk.StringVar()  # Working directory for output
         self.progress = tk.DoubleVar(value=0.0)
         self.is_processing = False
 
@@ -43,6 +44,20 @@ class PSDDateUpdater:
         )
         ttk.Button(
             browse_frame, text="Browse Folder", command=self.select_psd_folder
+        ).pack(side="left", padx=5)
+
+        # Output directory selection
+        output_frame = ttk.Frame(self.parent)
+        output_frame.pack(fill="x", pady=5)
+
+        ttk.Label(output_frame, text="Working Folder:").pack(side="left", padx=5)
+        ttk.Entry(output_frame, textvariable=self.output_dir, width=50).pack(
+            side="left", padx=5
+        )
+
+        # Browse output directory button
+        ttk.Button(
+            output_frame, text="Browse", command=self.select_output_directory
         ).pack(side="left", padx=5)
 
         # Progress bar
@@ -101,6 +116,30 @@ class PSDDateUpdater:
             self.status.set(f"Selected folder: {os.path.basename(folder)}")
             self.update_button.configure(state="disabled")
             self.results_text.delete(1.0, tk.END)
+
+    def select_output_directory(self):
+        """Open directory dialog to select output working folder."""
+        directory = filedialog.askdirectory(title="Select Working Folder for Output")
+        if directory:
+            self.output_dir.set(directory)
+            self.status.set(f"Selected working folder: {os.path.basename(directory)}")
+
+    def get_next_output_folder(self):
+        """Get the next available numbered folder in the output directory."""
+        base_dir = self.output_dir.get()
+        if not base_dir:
+            return None
+
+        # Find the next available number
+        counter = 1
+        while True:
+            folder_name = str(counter)
+            folder_path = os.path.join(base_dir, folder_name)
+            if not os.path.exists(folder_path):
+                # Create the directory
+                os.makedirs(folder_path)
+                return folder_path
+            counter += 1
 
     def cancel_processing(self):
         """Cancel the ongoing processing."""
@@ -205,6 +244,19 @@ class PSDDateUpdater:
         if not self.is_processing and not self.psd_file_path.get():
             return
 
+        # Check if output directory is selected
+        batch_folder = None
+        if self.output_dir.get():
+            # Create a new numbered folder for this batch
+            batch_folder = self.get_next_output_folder()
+        else:
+            use_source = messagebox.askyesno(
+                "No Working Folder",
+                "No working folder selected. Do you want to save in the source location?",
+            )
+            if not use_source:
+                return
+
         self.is_processing = True
         self.update_button.configure(state="disabled")
         self.analyze_button.configure(state="disabled")
@@ -224,7 +276,7 @@ class PSDDateUpdater:
                         break
 
                     file_path = os.path.join(path, filename)
-                    self.update_single_file(file_path)
+                    self.update_single_file(file_path, batch_folder)
 
                     processed += 1
                     progress = (processed / total_files) * 100
@@ -234,11 +286,17 @@ class PSDDateUpdater:
 
             else:
                 # Process single file
-                self.update_single_file(path)
+                self.update_single_file(path, batch_folder)
                 self.progress.set(100)
 
             if self.is_processing:
-                self.status.set("Update complete")
+                if batch_folder:
+                    folder_num = os.path.basename(batch_folder)
+                    self.status.set(
+                        f"Update complete - All files saved in folder {folder_num}"
+                    )
+                else:
+                    self.status.set("Update complete - Files saved in source location")
 
         except Exception as e:
             self.status.set(f"Error during update: {str(e)}")
@@ -246,7 +304,7 @@ class PSDDateUpdater:
         finally:
             self.reset_ui()
 
-    def update_single_file(self, file_path):
+    def update_single_file(self, file_path, batch_folder=None):
         """Update date in a single PSD file."""
         try:
             with Session() as ps:
@@ -257,7 +315,7 @@ class PSDDateUpdater:
                 text_layers_updated = self._process_layers(doc, today)
 
                 if text_layers_updated:
-                    self._save_document(doc)
+                    self._save_document(doc, batch_folder)
                     self.results_text.insert(
                         tk.END, f"Updated: {os.path.basename(file_path)}\n"
                     )
@@ -407,22 +465,26 @@ class PSDDateUpdater:
             # Re-enable the Analyze button
             self.analyze_button.configure(state="normal")
 
-    def _save_document(self, doc):
+    def _save_document(self, doc, batch_folder=None):
         """Save the document as both PSD and JPG with date prefix."""
         try:
             # Get original file path and create new paths with date prefix
             original_path = doc.fullName
-            file_dir = os.path.dirname(original_path)
             file_name = os.path.basename(original_path)
             name, ext = os.path.splitext(file_name)
+
+            # Use provided batch folder or source location
+            output_folder = batch_folder or os.path.dirname(original_path)
+            if batch_folder is None:
+                self.status.set("No output folder selected, saving in source location")
 
             # Create date prefix (YYMMDD)
             date_str = datetime.now().strftime("%y%m%d")
 
             # Create new filenames
-            new_psd_path = os.path.join(file_dir, f"{date_str}_{name}.psd")
-            new_jpg_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
-            ver2_jpg_path = os.path.join(file_dir, f"{date_str}_{name}_ver2.jpg")
+            new_psd_path = os.path.join(output_folder, f"{date_str}_{name}.psd")
+            new_jpg_path = os.path.join(output_folder, f"{date_str}_{name}.jpg")
+            ver2_jpg_path = os.path.join(output_folder, f"{date_str}_{name}_ver2.jpg")
 
             with Session() as ps:
                 # Save as PSD
@@ -451,8 +513,9 @@ class PSDDateUpdater:
                                 # Restore original visibility
                                 found_layer.visible = original_visibility
 
+                                output_dir = os.path.basename(output_folder)
                                 self.status.set(
-                                    f"Saved as: {os.path.basename(new_psd_path)}, "
+                                    f"Saved in folder {output_dir}: {os.path.basename(new_psd_path)}, "
                                     f"{os.path.basename(new_jpg_path)}, and "
                                     f"{os.path.basename(ver2_jpg_path)} "
                                     f"(Type 17 layer {position} datetime hidden)"
@@ -461,8 +524,9 @@ class PSDDateUpdater:
                     except:
                         continue
 
+            output_dir = os.path.basename(output_folder)
             self.status.set(
-                f"Saved as: {os.path.basename(new_psd_path)} and "
+                f"Saved in folder {output_dir}: {os.path.basename(new_psd_path)} and "
                 f"{os.path.basename(new_jpg_path)}"
             )
 
