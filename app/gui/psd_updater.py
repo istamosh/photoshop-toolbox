@@ -408,12 +408,32 @@ class PSDDateUpdater:
             self.analyze_button.configure(state="normal")
 
     def _save_document(self, doc):
-        """Save the document."""
+        """Save the document as both PSD and JPG with date prefix."""
         try:
-            # Save the document in place (PSD format)
-            doc.save()
+            # Get original file path and create new paths with date prefix
+            original_path = doc.fullName
+            file_dir = os.path.dirname(original_path)
+            file_name = os.path.basename(original_path)
+            name, ext = os.path.splitext(file_name)
+
+            # Create date prefix (YYMMDD)
+            date_str = datetime.now().strftime("%y%m%d")
+
+            # Create new filenames
+            new_psd_path = os.path.join(file_dir, f"{date_str}_{name}.psd")
+            new_jpg_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
+
+            with Session() as ps:
+                # Save as PSD
+                options = ps.PhotoshopSaveOptions()
+                doc.saveAs(new_psd_path, options, True)  # True = save as copy
+
+                # Save as JPG
+                jpg_options = ps.JPEGSaveOptions(quality=12)  # Highest quality
+                doc.saveAs(new_jpg_path, jpg_options, True)
+
             self.status.set(
-                f"Successfully saved document: {os.path.basename(doc.fullName)}"
+                f"Saved as: {os.path.basename(new_psd_path)} and {os.path.basename(new_jpg_path)}"
             )
 
         except Exception as save_error:
@@ -540,12 +560,32 @@ class PSDDateUpdater:
             return False
 
     def _save_document(self, doc):
-        """Save the document."""
+        """Save the document as both PSD and JPG with date prefix."""
         try:
-            # Save the document in place (PSD format)
-            doc.save()
+            # Get original file path and create new paths with date prefix
+            original_path = doc.fullName
+            file_dir = os.path.dirname(original_path)
+            file_name = os.path.basename(original_path)
+            name, ext = os.path.splitext(file_name)
+
+            # Create date prefix (YYMMDD)
+            date_str = datetime.now().strftime("%y%m%d")
+
+            # Create new filenames
+            new_psd_path = os.path.join(file_dir, f"{date_str}_{name}.psd")
+            new_jpg_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
+
+            with Session() as ps:
+                # Save as PSD
+                options = ps.PhotoshopSaveOptions()
+                doc.saveAs(new_psd_path, options, True)  # True = save as copy
+
+                # Save as JPG
+                jpg_options = ps.JPEGSaveOptions(quality=12)  # Highest quality
+                doc.saveAs(new_jpg_path, jpg_options, True)
+
             self.status.set(
-                f"Successfully saved document: {os.path.basename(doc.fullName)}"
+                f"Saved as: {os.path.basename(new_psd_path)} and {os.path.basename(new_jpg_path)}"
             )
 
         except Exception as save_error:
