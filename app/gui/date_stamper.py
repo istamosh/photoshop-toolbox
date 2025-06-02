@@ -17,6 +17,7 @@ class DateStamperApp:
         self.end_hour = tk.IntVar(value=10)  # Default end hour
         self.last_minute = None  # Track last used minute
         self.current_hour = None  # Track current hour for batch processing
+        self.output_dir = tk.StringVar()  # Working directory for output
         self.setup_ui()
 
     def setup_ui(self):
@@ -47,6 +48,20 @@ class DateStamperApp:
             button_frame, text="Browse Folder", command=self.browse_folder
         )
         self.browse_batch_btn.pack(side="left", padx=5)
+
+        # Output directory selection
+        output_frame = ttk.Frame(convert_frame)
+        output_frame.pack(fill="x", pady=(0, 10))
+
+        ttk.Label(output_frame, text="Working Folder:").pack(side="left", padx=5)
+        ttk.Entry(output_frame, textvariable=self.output_dir, width=50).pack(
+            side="left", padx=5
+        )
+
+        # Browse output directory button
+        ttk.Button(
+            output_frame, text="Browse", command=self.select_output_directory
+        ).pack(side="left", padx=5)
 
         # Time range frame
         time_frame = ttk.LabelFrame(convert_frame, text="Time Adjustment", padding="5")
@@ -138,6 +153,18 @@ class DateStamperApp:
             messagebox.showerror("Error", "Please select a valid folder")
             return
 
+        # Get output folder
+        output_folder = None
+        if self.output_dir.get():
+            output_folder = self.get_next_output_folder()
+        else:
+            use_source = messagebox.askyesno(
+                "No Working Folder",
+                "No working folder selected. Do you want to save in the source location?",
+            )
+            if not use_source:
+                return
+
         # Reset time tracking for new batch
         self.last_minute = None
         self.current_hour = None
@@ -162,10 +189,16 @@ class DateStamperApp:
         for filename in image_files:
             input_path = os.path.join(folder_path, filename)
             try:
-                self.process_single_image(input_path)
+                self.process_single_image(input_path, output_folder)
                 processed_count += 1
+                status_msg = (
+                    f"Processing: {processed_count}/{len(image_files)} - {filename}"
+                )
+                if output_folder:
+                    folder_num = os.path.basename(output_folder)
+                    status_msg += f" (Output folder: {folder_num})"
                 self.status_label.config(
-                    text=f"Processing: {processed_count}/{len(image_files)} - {filename}",
+                    text=status_msg,
                     foreground="black",
                 )
                 self.parent.update()  # Update UI
@@ -174,14 +207,20 @@ class DateStamperApp:
                 print(f"Error processing {filename}: {str(e)}")
 
         # Final status update
-        status = f"Completed: {processed_count} images processed"
+        if output_folder:
+            folder_num = os.path.basename(output_folder)
+            status = (
+                f"Completed: {processed_count} images processed in folder {folder_num}"
+            )
+        else:
+            status = f"Completed: {processed_count} images processed in source location"
         if error_count > 0:
             status += f", {error_count} errors"
         self.status_label.config(
             text=status, foreground="green" if error_count == 0 else "red"
         )
 
-    def process_single_image(self, input_path):
+    def process_single_image(self, input_path, output_folder=None):
         """Process a single image file."""
         try:
             # Open original image
@@ -245,12 +284,17 @@ class DateStamperApp:
                 (x, y), date_text, font=font, fill="black", align="right", anchor="ra"
             )
 
+            # Determine output directory
+            if output_folder:
+                save_dir = output_folder
+            else:
+                save_dir = os.path.dirname(input_path)
+
             # Create output filename with date stamp
-            file_dir = os.path.dirname(input_path)
             file_name = os.path.basename(input_path)
             name, ext = os.path.splitext(file_name)
             date_str = now.strftime("%y%m%d")
-            output_path = os.path.join(file_dir, f"{date_str}_{name}.jpg")
+            output_path = os.path.join(save_dir, f"{date_str}_{name}.jpg")
 
             # Save the image with high quality
             img.save(output_path, "JPEG", quality=95)
@@ -266,15 +310,37 @@ class DateStamperApp:
             messagebox.showerror("Error", "Please select an image file first")
             return
 
+        # Get output folder
+        output_folder = None
+        if self.output_dir.get():
+            output_folder = self.get_next_output_folder()
+        else:
+            use_source = messagebox.askyesno(
+                "No Working Folder",
+                "No working folder selected. Do you want to save in the source location?",
+            )
+            if not use_source:
+                return
+
         try:
             # Reset time tracking for single image
             self.last_minute = None
             self.current_hour = None
-            output_path = self.process_single_image(self.file_path_var.get())
-            self.status_label.config(
-                text=f"Successfully saved image with date stamp: {os.path.basename(output_path)}",
-                foreground="green",
+            output_path = self.process_single_image(
+                self.file_path_var.get(), output_folder
             )
+
+            if output_folder:
+                folder_num = os.path.basename(output_folder)
+                self.status_label.config(
+                    text=f"Successfully saved image in folder {folder_num}: {os.path.basename(output_path)}",
+                    foreground="green",
+                )
+            else:
+                self.status_label.config(
+                    text=f"Successfully saved image: {os.path.basename(output_path)}",
+                    foreground="green",
+                )
         except Exception as e:
             self.status_label.config(
                 text=f"Error adding date stamp: {str(e)}",
@@ -291,4 +357,31 @@ class DateStamperApp:
             self.file_path_var.set(filename)
             self.status_label.config(
                 text=f"Selected file: {os.path.basename(filename)}", foreground="black"
+            )
+
+    def get_next_output_folder(self):
+        """Get the next available numbered folder in the output directory."""
+        base_dir = self.output_dir.get()
+        if not base_dir:
+            return None
+
+        # Find the next available number
+        counter = 1
+        while True:
+            folder_name = str(counter)
+            folder_path = os.path.join(base_dir, folder_name)
+            if not os.path.exists(folder_path):
+                # Create the directory
+                os.makedirs(folder_path)
+                return folder_path
+            counter += 1
+
+    def select_output_directory(self):
+        """Open directory dialog to select output working folder."""
+        directory = filedialog.askdirectory(title="Select Working Folder for Output")
+        if directory:
+            self.output_dir.set(directory)
+            self.status_label.config(
+                text=f"Selected working folder: {os.path.basename(directory)}",
+                foreground="black",
             )
