@@ -157,6 +157,11 @@ class DateStamperApp:
         output_folder = None
         if self.output_dir.get():
             output_folder = self.get_next_output_folder()
+            if output_folder:
+                folder_num = os.path.basename(output_folder)
+                # Create Raw subfolder for original files
+                raw_dir = os.path.join(output_folder, "Raw")
+                os.makedirs(raw_dir, exist_ok=True)
         else:
             use_source = messagebox.askyesno(
                 "No Working Folder",
@@ -191,18 +196,17 @@ class DateStamperApp:
             try:
                 self.process_single_image(input_path, output_folder)
                 processed_count += 1
-                status_msg = (
-                    f"Processing: {processed_count}/{len(image_files)} - {filename}"
-                )
                 if output_folder:
                     folder_num = os.path.basename(output_folder)
-                    status_msg += (
-                        f" (Output folder: {folder_num}, originals in Raw subfolder)"
+                    self.status_label.config(
+                        text=f"Processing: {processed_count}/{len(image_files)} - Saving original {filename} to Raw folder, creating stamped version...",
+                        foreground="black",
                     )
-                self.status_label.config(
-                    text=status_msg,
-                    foreground="black",
-                )
+                else:
+                    self.status_label.config(
+                        text=f"Processing: {processed_count}/{len(image_files)} - {filename}",
+                        foreground="black",
+                    )
                 self.parent.update()  # Update UI
             except Exception as e:
                 error_count += 1
@@ -211,7 +215,7 @@ class DateStamperApp:
         # Final status update
         if output_folder:
             folder_num = os.path.basename(output_folder)
-            status = f"Completed: {processed_count} images processed in folder {folder_num} (originals in {folder_num}/Raw)"
+            status = f"Completed: {processed_count} images processed. Originals saved in {folder_num}/Raw, stamped versions in folder {folder_num}"
         else:
             status = f"Completed: {processed_count} images processed in source location"
         if error_count > 0:
