@@ -17,7 +17,7 @@ class ImageSearchApp:
         # Variables
         self.reference_image_path = tk.StringVar()
         self.search_directory = tk.StringVar()
-        self.threshold = tk.DoubleVar(value=10)  # Default threshold
+        self.threshold = tk.DoubleVar(value=90)  # Default threshold 90% similarity
         self.hash_type = tk.StringVar(value="phash")  # Default hash type
         self.status = tk.StringVar(value="Ready")
         self.is_searching = False
@@ -63,15 +63,25 @@ class ImageSearchApp:
         hash_types.grid(row=2, column=1, sticky="w", padx=5)
 
         # Threshold slider
-        tk.Label(self.parent, text="Threshold:").grid(
-            row=3, column=0, sticky="w", padx=5, pady=5
+        threshold_frame = ttk.Frame(self.parent)
+        threshold_frame.grid(row=3, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
+
+        tk.Label(threshold_frame, text="Similarity Threshold:").pack(
+            side="left", padx=5
         )
         threshold_slider = ttk.Scale(
-            self.parent, from_=0, to=30, variable=self.threshold, orient="horizontal"
+            threshold_frame,
+            from_=1,
+            to=100,
+            variable=self.threshold,
+            orient="horizontal",
         )
-        threshold_slider.grid(
-            row=3, column=1, sticky="ew", padx=5
-        )  # Progress and Status section
+        threshold_slider.pack(side="left", fill="x", expand=True, padx=5)
+        # Add value label
+        tk.Label(threshold_frame, textvariable=self.threshold).pack(side="left", padx=5)
+        tk.Label(threshold_frame, text="%").pack(side="left")
+
+        # Progress and Status section
         progress_frame = ttk.LabelFrame(self.parent, text="Progress")
         progress_frame.grid(row=4, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
 
@@ -158,11 +168,18 @@ class ImageSearchApp:
 
     def calculate_similarity_score(self, hash1, hash2):
         """Calculate a similarity score between two image hashes (0-100%, higher is more similar)."""
-        hash_size = len(hash1.hash) * len(hash1.hash[0])  # Total bits in hash
-        hamming_distance = hash1 - hash2  # Number of different bits
-        return 100 - (
-            hamming_distance * 100.0 / hash_size
-        )  # Convert to similarity percentage
+        if hash1 is None or hash2 is None:
+            return 0.0
+
+        try:
+            hash_size = len(hash1.hash) * len(hash1.hash[0])  # Total bits in hash
+            hamming_distance = hash1 - hash2  # Number of different bits
+            similarity = 100.0 * (
+                1 - (hamming_distance / hash_size)
+            )  # Convert to similarity percentage
+            return max(0.0, min(100.0, similarity))  # Ensure result is between 0-100
+        except Exception:
+            return 0.0
 
     def start_search(self):
         """Start the image search process."""
@@ -231,7 +248,9 @@ class ImageSearchApp:
         try:
             reference_path = self.reference_image_path.get()
             search_dir = self.search_directory.get()
-            threshold = self.threshold.get()
+            threshold = float(
+                self.threshold.get()
+            )  # Now represents similarity threshold directly
             hash_type = self.hash_type.get()
 
             # Calculate reference image hash
@@ -244,7 +263,10 @@ class ImageSearchApp:
 
             self.result_queue.put(("status", "Searching for similar images..."))
             self.result_queue.put(
-                ("result", f"Using {hash_type}, threshold: {threshold}%\n\n")
+                (
+                    "result",
+                    f"Using {hash_type}, minimum similarity threshold: {threshold}%\n\n",
+                )
             )
 
             # Search for similar images
@@ -265,14 +287,16 @@ class ImageSearchApp:
                         img_path = os.path.join(root_dir, file)
                         self.result_queue.put(("status", f"Processing: {file}"))
 
+                        # Skip reference image itself
+                        if img_path == reference_path:
+                            continue
+
                         img_hash = self.calculate_image_hash(img_path, hash_type)
                         if img_hash:
                             similarity = self.calculate_similarity_score(
                                 ref_hash, img_hash
                             )
-                            # Convert threshold from difference to similarity
-                            similarity_threshold = 100 - threshold
-                            if similarity >= similarity_threshold:
+                            if similarity >= threshold:
                                 similar_images.append((img_path, similarity))
 
             # Sort and display results
@@ -281,17 +305,28 @@ class ImageSearchApp:
                     key=lambda x: x[1], reverse=True
                 )  # Sort by similarity (highest first)
                 if similar_images:
+                    self.result_queue.put(
+                        ("result", f"Found {len(similar_images)} similar images:\n\n")
+                    )
                     for path, similarity in similar_images:
-                        result_text = f"Similarity: {similarity:.2f}%\nPath: "
+                        result_text = f"Similarity: {similarity:.1f}%\nPath: "
                         self.result_queue.put(("result", result_text))
                         # Add clickable path with tag
                         self.result_queue.put(("path_link", path))
                         self.result_queue.put(("result", "\n\n"))
                 else:
-                    self.result_queue.put(("result", "No similar images found.\n"))
+                    self.result_queue.put(
+                        (
+                            "result",
+                            f"No images found with similarity >= {threshold}%.\n",
+                        )
+                    )
 
                 self.result_queue.put(
-                    ("status", f"Search complete. Processed {total_processed} images.")
+                    (
+                        "status",
+                        f"Search complete. Found {len(similar_images)} similar images out of {total_processed} processed.",
+                    )
                 )
 
         except Exception as e:
