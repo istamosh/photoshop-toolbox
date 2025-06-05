@@ -16,6 +16,10 @@ class PSDDateUpdater:
         self.psd_file_path = tk.StringVar()
         self.output_dir = tk.StringVar()  # Working directory for output
 
+        # Custom date and time variables
+        self.custom_date = tk.StringVar()  # For custom date input
+        self.custom_time = tk.StringVar()  # For custom time input
+
         # Address and company information
         self.street_name = tk.StringVar()
         self.ward = tk.StringVar()
@@ -66,6 +70,34 @@ class PSDDateUpdater:
         ttk.Button(
             output_frame, text="Browse", command=self.select_output_directory
         ).pack(side="left", padx=5)
+
+        # Custom Date/Time Frame
+        datetime_frame = ttk.LabelFrame(
+            self.parent, text="Custom Date/Time (Optional)", padding=10
+        )
+        datetime_frame.pack(fill="x", padx=5, pady=5)
+
+        # Custom date field
+        date_frame = ttk.Frame(datetime_frame)
+        date_frame.pack(fill="x", pady=2)
+        ttk.Label(date_frame, text="Date (DD/MM/YYYY):").pack(side="left", padx=5)
+        ttk.Entry(date_frame, textvariable=self.custom_date, width=15).pack(
+            side="left", padx=5
+        )
+        ttk.Label(date_frame, text="(Leave empty to use current date)").pack(
+            side="left", padx=5
+        )
+
+        # Custom time field
+        time_frame = ttk.Frame(datetime_frame)
+        time_frame.pack(fill="x", pady=2)
+        ttk.Label(time_frame, text="Time (HH.MM):").pack(side="left", padx=5)
+        ttk.Entry(time_frame, textvariable=self.custom_time, width=10).pack(
+            side="left", padx=5
+        )
+        ttk.Label(time_frame, text="(Leave empty to keep existing time)").pack(
+            side="left", padx=5
+        )
 
         # Address and Company Information Frame
         info_frame = ttk.LabelFrame(
@@ -375,8 +407,24 @@ class PSDDateUpdater:
     def _update_text_layer(self, text_item, today, time_part):
         """Update a text layer with new date while keeping the time."""
         try:
-            # Format date and time in new format (DD/MM/YYYY HH.MM)
-            date_time = f"{today.replace('-', '/')} {time_part.replace(':', '.')}"
+            # Check for custom date and time
+            custom_date = self.custom_date.get().strip()
+            custom_time = self.custom_time.get().strip()
+
+            # Use custom date if provided and valid (DD/MM/YYYY format)
+            if custom_date and len(custom_date.split("/")) == 3:
+                final_date = custom_date
+            else:
+                final_date = today.replace("-", "/")
+
+            # Use custom time if provided and valid (HH.MM format)
+            if custom_time and "." in custom_time:
+                final_time = custom_time
+            else:
+                final_time = time_part.replace(":", ".")
+
+            # Format the final date and time
+            date_time = f"{final_date} {final_time}"
 
             # Filter out empty location fields
             location_fields = [
