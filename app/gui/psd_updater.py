@@ -440,17 +440,21 @@ class PSDDateUpdater:
                 final_time = time_part.replace(":", ".")
                 self.current_batch_time = None
 
-            # Format the final date and time
+            # Format the date and time in the new format
             date_time = f"{final_date} {final_time}"
 
-            # Get location fields from text widget, filtering out empty lines
+            # Get location fields from text widget
             location_text = self.location_text.get("1.0", tk.END).strip()
             location_fields = [
                 line.strip() for line in location_text.split("\n") if line.strip()
             ]
 
-            # Combine with proper line breaks
-            all_fields = [date_time] + location_fields
+            # Always create final text content in new format
+            if location_fields:
+                all_fields = [date_time] + location_fields
+            else:
+                all_fields = [date_time]  # Just date/time if no location info
+
             full_text = "\r".join(all_fields)
 
             # Update text content
@@ -751,12 +755,75 @@ class PSDDateUpdater:
         self.results_text.see(tk.END)  # Scroll to latest
         self.status.set(f"Analyzed layer: {layer_name}")
 
+    def _extract_and_set_location_info(self, text_content):
+        """Extract location information from text content and set it in the location textbox."""
+        try:
+            # Split the content by carriage return or newline
+            lines = text_content.replace("\r", "\n").split("\n")
+
+            # First line typically contains date and time, skip it
+            if len(lines) > 1:
+                # Join the remaining lines (location info) with newlines
+                location_info = "\n".join(
+                    line.strip() for line in lines[1:] if line.strip()
+                )
+
+                # Clear existing content and insert new content
+                self.location_text.delete("1.0", tk.END)
+                if location_info:
+                    self.location_text.insert("1.0", location_info)
+
+                return True
+        except Exception as e:
+            self.status.set(f"Error extracting location info: {str(e)}")
+        return False
+
     def _analyze_text_properties(self, layer):
         """Analyze and display text properties for a text layer."""
         text_item = layer.textItem
         text_content = text_item.contents
         self.results_text.insert(tk.END, "Text Properties:\n")
         self.results_text.insert(tk.END, f"  Content: {text_content}\n")
+
+        # Normalize content by converting all line breaks to \n
+        normalized_content = text_content.replace("\r", "\n")
+        lines = [
+            line.strip() for line in normalized_content.split("\n") if line.strip()
+        ]
+
+        # Check if this might be a datetime layer
+        if len(lines) >= 1:
+            # Handle old format (separate date and time lines)
+            if (
+                len(lines) == 2
+                and ("-" in lines[0] or "/" in lines[0])
+                and ":" in lines[1]
+            ):
+                date_part = lines[0].replace("-", "/")
+                time_part = lines[1].replace(":", ".")
+                self.custom_date.set(date_part)
+                self.custom_time.set(time_part)
+                # Clear location text as this is old format without location info
+                self.location_text.delete("1.0", tk.END)
+
+            # Handle new format (date time on first line, locations follow)
+            elif (
+                " " in lines[0]
+                and ("/" in lines[0] or "-" in lines[0])
+                and ("." in lines[0] or ":" in lines[0])
+            ):
+                date_time = lines[0].split(" ")
+                if len(date_time) == 2:
+                    date_part = date_time[0].replace("-", "/")
+                    time_part = date_time[1].replace(":", ".")
+                    self.custom_date.set(date_part)
+                    self.custom_time.set(time_part)
+
+                    # If there are additional lines, treat them as location info
+                    if len(lines) > 1:
+                        location_info = "\n".join(lines[1:])
+                        self.location_text.delete("1.0", tk.END)
+                        self.location_text.insert("1.0", location_info)
 
         for prop in ["font", "size", "justification"]:
             try:
