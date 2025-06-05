@@ -21,13 +21,8 @@ class PSDDateUpdater:
         self.custom_time = tk.StringVar()  # For custom time input
         self.current_batch_time = None  # Track current time in batch processing
 
-        # Address and company information
-        self.street_name = tk.StringVar()
-        self.ward = tk.StringVar()
-        self.subdistrict = tk.StringVar()
-        self.district = tk.StringVar()
-        self.province = tk.StringVar()
-        self.company_name = tk.StringVar()
+        # Location information (stored as multiline text)
+        self.location_info = tk.StringVar()
 
         self.progress = tk.DoubleVar(value=0.0)
         self.is_processing = False
@@ -100,32 +95,32 @@ class PSDDateUpdater:
             side="left", padx=5
         )
 
-        # Address and Company Information Frame
+        # Location Information Frame (using multiline text widget)
         info_frame = ttk.LabelFrame(
             self.parent, text="Location Information", padding=10
         )
         info_frame.pack(fill="x", padx=5, pady=5)
 
-        # Create grid for address fields
-        fields = [
-            ("Street Name:", self.street_name),
-            ("Ward:", self.ward),
-            ("Subdistrict:", self.subdistrict),
-            ("District:", self.district),
-            ("Province:", self.province),
-            ("Company Name:", self.company_name),
-        ]
+        # Help text
+        help_text = "Enter location details (one per line):\nStreet Name\nWard\nSubdistrict\nDistrict\nProvince\nCompany Name"
+        ttk.Label(info_frame, text=help_text).pack(anchor="w", padx=5, pady=(0, 5))
 
-        for i, (label_text, var) in enumerate(fields):
-            ttk.Label(info_frame, text=label_text).grid(
-                row=i, column=0, sticky="e", padx=5, pady=2
-            )
-            ttk.Entry(info_frame, textvariable=var, width=50).grid(
-                row=i, column=1, sticky="ew", padx=5, pady=2
-            )
+        # Create multiline text widget with scrollbar
+        text_frame = ttk.Frame(info_frame)
+        text_frame.pack(fill="x", expand=True, padx=5, pady=5)
+
+        self.location_text = tk.Text(text_frame, height=6, width=50)
+        self.location_text.pack(side="left", fill="x", expand=True)
+
+        scrollbar = ttk.Scrollbar(
+            text_frame, orient="vertical", command=self.location_text.yview
+        )
+        scrollbar.pack(side="right", fill="y")
+
+        self.location_text.configure(yscrollcommand=scrollbar.set)
 
         # Configure grid column to expand
-        info_frame.columnconfigure(1, weight=1)
+        info_frame.columnconfigure(0, weight=1)
 
         # Progress bar
         progress_frame = ttk.Frame(self.parent)
@@ -448,18 +443,10 @@ class PSDDateUpdater:
             # Format the final date and time
             date_time = f"{final_date} {final_time}"
 
-            # Filter out empty location fields
+            # Get location fields from text widget, filtering out empty lines
+            location_text = self.location_text.get("1.0", tk.END).strip()
             location_fields = [
-                field
-                for field in [
-                    self.street_name.get(),
-                    self.ward.get(),
-                    self.subdistrict.get(),
-                    self.district.get(),
-                    self.province.get(),
-                    self.company_name.get(),
-                ]
-                if field.strip()
+                line.strip() for line in location_text.split("\n") if line.strip()
             ]
 
             # Combine with proper line breaks
