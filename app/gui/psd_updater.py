@@ -375,13 +375,13 @@ class PSDDateUpdater:
     def _update_text_layer(self, text_item, today, time_part):
         """Update a text layer with new date while keeping the time."""
         try:
-            # Format date and time in new format
+            # Format date and time in new format (DD/MM/YYYY HH.MM)
             date_time = f"{today.replace('-', '/')} {time_part.replace(':', '.')}"
 
-            # Combine with address information
-            full_text = "\r".join(
-                [
-                    date_time,
+            # Filter out empty location fields
+            location_fields = [
+                field
+                for field in [
                     self.street_name.get(),
                     self.ward.get(),
                     self.subdistrict.get(),
@@ -389,11 +389,57 @@ class PSDDateUpdater:
                     self.province.get(),
                     self.company_name.get(),
                 ]
-            )
+                if field.strip()
+            ]
 
+            # Combine with proper line breaks
+            all_fields = [date_time] + location_fields
+            full_text = "\r".join(all_fields)
+
+            # Update text content
             text_item.contents = full_text
 
-            # Verify if it worked
+            # Set right-alignment and attempt position adjustment
+            try:
+                # Right-justify the text
+                text_item.justification = 3  # PsRightJustified = 3
+
+                # Get the document and layer for positioning
+                layer = text_item.parent
+                doc = layer.parent
+
+                # Get layer bounds
+                bounds = layer.bounds  # Calculate padding and dimensions
+                padding = min(doc.width, doc.height) * 0.05  # 5% of smaller dimension
+
+                # Get current bounds and reset position to origin
+                current_x = bounds[0]
+                current_y = bounds[1]
+
+                # Calculate the desired position in the bottom-right corner
+                new_x = doc.width - (bounds[2] - bounds[0]) - padding
+                new_y = doc.height - (bounds[3] - bounds[1]) - padding
+
+                # Calculate the relative movement needed
+                delta_x = new_x - current_x
+                delta_y = new_y - current_y
+
+                # Move layer by the relative difference
+                layer.translate(delta_x, delta_y)
+
+                # Verify position
+                updated_bounds = layer.bounds
+                if updated_bounds[3] > doc.height or updated_bounds[2] > doc.width:
+                    # If text is still outside, adjust inward
+                    adjust_x = max(0, updated_bounds[2] - doc.width + padding)
+                    adjust_y = max(0, updated_bounds[3] - doc.height + padding)
+                    layer.translate(-adjust_x, -adjust_y)
+            except Exception as pos_error:
+                self.status.set(
+                    f"Warning: Could not adjust text position - {str(pos_error)}"
+                )
+
+            # Verify update
             updated = text_item.contents
             return len(updated.split("\r")) > 1
 
