@@ -15,6 +15,15 @@ class PSDDateUpdater:
         self.status = tk.StringVar(value="Ready")
         self.psd_file_path = tk.StringVar()
         self.output_dir = tk.StringVar()  # Working directory for output
+
+        # Address and company information
+        self.street_name = tk.StringVar()
+        self.ward = tk.StringVar()
+        self.subdistrict = tk.StringVar()
+        self.district = tk.StringVar()
+        self.province = tk.StringVar()
+        self.company_name = tk.StringVar()
+
         self.progress = tk.DoubleVar(value=0.0)
         self.is_processing = False
 
@@ -54,11 +63,36 @@ class PSDDateUpdater:
         ttk.Entry(output_frame, textvariable=self.output_dir, width=50).pack(
             side="left", padx=5
         )
-
-        # Browse output directory button
         ttk.Button(
             output_frame, text="Browse", command=self.select_output_directory
         ).pack(side="left", padx=5)
+
+        # Address and Company Information Frame
+        info_frame = ttk.LabelFrame(
+            self.parent, text="Location Information", padding=10
+        )
+        info_frame.pack(fill="x", padx=5, pady=5)
+
+        # Create grid for address fields
+        fields = [
+            ("Street Name:", self.street_name),
+            ("Ward:", self.ward),
+            ("Subdistrict:", self.subdistrict),
+            ("District:", self.district),
+            ("Province:", self.province),
+            ("Company Name:", self.company_name),
+        ]
+
+        for i, (label_text, var) in enumerate(fields):
+            ttk.Label(info_frame, text=label_text).grid(
+                row=i, column=0, sticky="e", padx=5, pady=2
+            )
+            ttk.Entry(info_frame, textvariable=var, width=50).grid(
+                row=i, column=1, sticky="ew", padx=5, pady=2
+            )
+
+        # Configure grid column to expand
+        info_frame.columnconfigure(1, weight=1)
 
         # Progress bar
         progress_frame = ttk.Frame(self.parent)
@@ -341,12 +375,27 @@ class PSDDateUpdater:
     def _update_text_layer(self, text_item, today, time_part):
         """Update a text layer with new date while keeping the time."""
         try:
-            new_text = f"{today}\r{time_part}"
-            text_item.contents = new_text
+            # Format date and time in new format
+            date_time = f"{today.replace('-', '/')} {time_part.replace(':', '.')}"
+
+            # Combine with address information
+            full_text = "\r".join(
+                [
+                    date_time,
+                    self.street_name.get(),
+                    self.ward.get(),
+                    self.subdistrict.get(),
+                    self.district.get(),
+                    self.province.get(),
+                    self.company_name.get(),
+                ]
+            )
+
+            text_item.contents = full_text
 
             # Verify if it worked
             updated = text_item.contents
-            return "\r" in updated
+            return len(updated.split("\r")) > 1
 
         except Exception as update_error:
             self.status.set(f"Error updating text: {str(update_error)}")
@@ -636,8 +685,11 @@ class PSDDateUpdater:
         for i, layer in enumerate(layers):
             try:
                 if hasattr(layer, "textItem") and layer.textItem:
-                    current_text = layer.textItem.contents
-                    if "\r" in current_text or "\n" in current_text:
+                    text_content = layer.textItem.contents
+                    # Check if it's a date/time layer by looking for date/time patterns
+                    if ("/" in text_content and "." in text_content) or (
+                        "\r" in text_content
+                    ):
                         datetime_layer = layer
                         # Check if the previous layer is Type 17
                         if i > 0 and layers[i - 1].kind == 17:
@@ -657,15 +709,26 @@ class PSDDateUpdater:
                         continue
 
                     current_text = text_item.contents
-
-                    # Try to split the text into date and time parts
-                    normalized_text = current_text.replace("\r", " ").replace("\n", " ")
-                    parts = normalized_text.split()
-
-                    if len(parts) == 2 and ":" in parts[1]:
-                        time_part = parts[1]
-                        if self._update_text_layer(text_item, today, time_part):
-                            text_layers_updated = True
+                    # Try to extract date and time
+                    if "/" in current_text and "." in current_text:
+                        # New format
+                        first_line = current_text.split("\r")[0]
+                        date_time = first_line.split()
+                        if len(date_time) == 2:
+                            time_part = date_time[1].replace(".", ":")
+                            if ":" in time_part:
+                                if self._update_text_layer(text_item, today, time_part):
+                                    text_layers_updated = True
+                    else:
+                        # Old format
+                        normalized_text = current_text.replace("\r", " ").replace(
+                            "\n", " "
+                        )
+                        parts = normalized_text.split()
+                        if len(parts) == 2 and ":" in parts[1]:
+                            time_part = parts[1]
+                            if self._update_text_layer(text_item, today, time_part):
+                                text_layers_updated = True
 
             except Exception as update_error:
                 self.status.set(f"Error updating layer: {str(update_error)}")
