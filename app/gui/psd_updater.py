@@ -19,6 +19,7 @@ class PSDDateUpdater:
         # Custom date and time variables
         self.custom_date = tk.StringVar()  # For custom date input
         self.custom_time = tk.StringVar()  # For custom time input
+        self.current_batch_time = None  # Track current time in batch processing
 
         # Address and company information
         self.street_name = tk.StringVar()
@@ -310,6 +311,9 @@ class PSDDateUpdater:
         if not self.is_processing and not self.psd_file_path.get():
             return
 
+        # Reset batch time counter
+        self.current_batch_time = None
+
         # Check if output directory is selected
         batch_folder = None
         if self.output_dir.get():
@@ -417,11 +421,29 @@ class PSDDateUpdater:
             else:
                 final_date = today.replace("-", "/")
 
-            # Use custom time if provided and valid (HH.MM format)
+            # Handle time with batch increment
             if custom_time and "." in custom_time:
-                final_time = custom_time
+                # Initialize batch time if not set
+                if self.current_batch_time is None:
+                    # Parse the custom time
+                    hour, minute = map(int, custom_time.split("."))
+                    self.current_batch_time = (hour, minute)
+                else:
+                    # Increment minute by 1 for next file in batch
+                    hour, minute = self.current_batch_time
+                    minute += 1
+                    if minute >= 60:
+                        hour += 1
+                        minute = 0
+                    if hour >= 24:
+                        hour = 0
+                    self.current_batch_time = (hour, minute)
+
+                # Format the time with leading zeros
+                final_time = f"{hour:02d}.{minute:02d}"
             else:
                 final_time = time_part.replace(":", ".")
+                self.current_batch_time = None
 
             # Format the final date and time
             date_time = f"{final_date} {final_time}"
