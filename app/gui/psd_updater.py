@@ -456,9 +456,19 @@ class PSDDateUpdater:
                 layer = text_item.parent
                 doc = layer.parent
 
+                # Calculate text size based on document dimensions
+                # Make text size 3.5% of the smaller document dimension
+                min_dimension = min(doc.width, doc.height)
+                text_size = min_dimension * 0.035  # 3.5% of smaller dimension
+                text_item.size = text_size
+
+                # Set the leading (line spacing) to 120% of text size
+                text_item.leading = text_size * 1.2
+
                 # Get layer bounds
-                bounds = layer.bounds  # Calculate padding and dimensions
-                padding = min(doc.width, doc.height) * 0.05  # 5% of smaller dimension
+                bounds = layer.bounds
+                # Calculate padding based on document size (3% of smaller dimension)
+                padding = min(doc.width, doc.height) * 0.03
 
                 # Get current bounds and reset position to origin
                 current_x = bounds[0]
@@ -475,16 +485,17 @@ class PSDDateUpdater:
                 # Move layer by the relative difference
                 layer.translate(delta_x, delta_y)
 
-                # Verify position
+                # Verify and adjust if still outside bounds
                 updated_bounds = layer.bounds
                 if updated_bounds[3] > doc.height or updated_bounds[2] > doc.width:
                     # If text is still outside, adjust inward
                     adjust_x = max(0, updated_bounds[2] - doc.width + padding)
                     adjust_y = max(0, updated_bounds[3] - doc.height + padding)
                     layer.translate(-adjust_x, -adjust_y)
+
             except Exception as pos_error:
                 self.status.set(
-                    f"Warning: Could not adjust text position - {str(pos_error)}"
+                    f"Warning: Could not adjust text position/size - {str(pos_error)}"
                 )
 
             # Verify update
