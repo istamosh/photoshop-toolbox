@@ -15,6 +15,9 @@ class DateStamperApp:
         self.parent = parent
         self.start_hour = tk.IntVar(value=7)  # Default start hour
         self.end_hour = tk.IntVar(value=10)  # Default end hour
+        self.threshold_hour = tk.IntVar(
+            value=11
+        )  # Default threshold for time adjustment
         self.last_minute = None  # Track last used minute
         self.current_hour = None  # Track current hour for batch processing
         self.output_dir = tk.StringVar()  # Working directory for output
@@ -61,28 +64,47 @@ class DateStamperApp:
         # Browse output directory button
         ttk.Button(
             output_frame, text="Browse", command=self.select_output_directory
-        ).pack(side="left", padx=5)
-
-        # Time range frame
+        ).pack(
+            side="left", padx=5
+        )  # Time range frame
         time_frame = ttk.LabelFrame(convert_frame, text="Time Adjustment", padding="5")
         time_frame.pack(fill="x", pady=(0, 10))
 
-        # Time range controls
-        ttk.Label(time_frame, text="For times after 11:00, adjust to between:").pack(
+        # Time adjustment threshold
+        threshold_frame = ttk.Frame(time_frame)
+        threshold_frame.pack(fill="x", pady=(0, 5))
+        ttk.Label(threshold_frame, text="For times after:").pack(side="left", padx=5)
+        ttk.Spinbox(
+            threshold_frame,
+            from_=0,
+            to=23,
+            width=3,
+            textvariable=self.threshold_hour,
+            wrap=True,
+        ).pack(side="left", padx=2)
+        ttk.Label(threshold_frame, text=":00, adjust to between:").pack(
             side="left", padx=5
         )
 
+        # Time range controls
+        range_frame = ttk.Frame(time_frame)
+        range_frame.pack(fill="x")
         ttk.Spinbox(
-            time_frame, from_=0, to=23, width=3, textvariable=self.start_hour, wrap=True
+            range_frame,
+            from_=0,
+            to=23,
+            width=3,
+            textvariable=self.start_hour,
+            wrap=True,
+        ).pack(side="left", padx=(5, 2))
+
+        ttk.Label(range_frame, text="and").pack(side="left", padx=5)
+
+        ttk.Spinbox(
+            range_frame, from_=0, to=23, width=3, textvariable=self.end_hour, wrap=True
         ).pack(side="left", padx=2)
 
-        ttk.Label(time_frame, text="and").pack(side="left", padx=5)
-
-        ttk.Spinbox(
-            time_frame, from_=0, to=23, width=3, textvariable=self.end_hour, wrap=True
-        ).pack(side="left", padx=2)
-
-        ttk.Label(time_frame, text="hours").pack(side="left", padx=5)
+        ttk.Label(range_frame, text="hours").pack(side="left", padx=5)
 
         # Process buttons frame
         process_frame = ttk.Frame(convert_frame)
@@ -109,7 +131,8 @@ class DateStamperApp:
             self.last_minute = (
                 input_minute - 1
             )  # Start one minute before so first increment matches input
-            if input_hour >= 11:
+            threshold = self.threshold_hour.get()
+            if input_hour >= threshold:
                 start = self.start_hour.get()
                 end = self.end_hour.get()
                 if start > end:
@@ -121,16 +144,20 @@ class DateStamperApp:
         # Increment minute for each image
         self.last_minute = (self.last_minute + 1) % 60
 
-        # If minutes roll over or we're past 11:00, possibly get new hour
-        if self.last_minute == 0 or (input_hour >= 11 and self.current_hour is None):
+        # If minutes roll over or we're past the threshold hour, possibly get new hour
+        threshold = self.threshold_hour.get()
+        if self.last_minute == 0 or (
+            input_hour >= threshold and self.current_hour is None
+        ):
             start = self.start_hour.get()
             end = self.end_hour.get()
             if start > end:
                 start, end = end, start
             self.current_hour = random.randint(start, end)
 
-        # Use randomized hour if after 11:00, otherwise use input hour
-        display_hour = self.current_hour if input_hour >= 11 else input_hour
+        # Use randomized hour if after threshold, otherwise use input hour
+        threshold = self.threshold_hour.get()
+        display_hour = self.current_hour if input_hour >= threshold else input_hour
         return f"{display_hour:02d}:{self.last_minute:02d}"
 
     def browse_folder(self):
