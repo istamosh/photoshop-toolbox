@@ -60,15 +60,23 @@ class ImageSearchApp:
         hash_types = ttk.Combobox(
             self.parent, textvariable=self.hash_type, values=["phash", "ahash"]
         )
-        hash_types.grid(row=2, column=1, sticky="w", padx=5)
-
-        # Threshold slider
-        threshold_frame = ttk.Frame(self.parent)
+        hash_types.grid(row=2, column=1, sticky="w", padx=5)  # Threshold slider
+        threshold_frame = ttk.LabelFrame(self.parent, text="Similarity Threshold")
         threshold_frame.grid(row=3, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
 
-        tk.Label(threshold_frame, text="Similarity Threshold:").pack(
-            side="left", padx=5
+        # Value display frame
+        value_frame = ttk.Frame(threshold_frame)
+        value_frame.pack(fill="x", padx=5, pady=(0, 5))
+
+        # Create StringVar to format the threshold value
+        self.threshold_display = tk.StringVar()
+        self.threshold.trace_add(
+            "write",
+            lambda *args: self.threshold_display.set(f"{self.threshold.get():.1f}%"),
         )
+        tk.Label(value_frame, textvariable=self.threshold_display).pack()
+
+        # Slider
         threshold_slider = ttk.Scale(
             threshold_frame,
             from_=1,
@@ -76,10 +84,7 @@ class ImageSearchApp:
             variable=self.threshold,
             orient="horizontal",
         )
-        threshold_slider.pack(side="left", fill="x", expand=True, padx=5)
-        # Add value label
-        tk.Label(threshold_frame, textvariable=self.threshold).pack(side="left", padx=5)
-        tk.Label(threshold_frame, text="%").pack(side="left")
+        threshold_slider.pack(fill="x", padx=5, pady=(0, 5))
 
         # Progress and Status section
         progress_frame = ttk.LabelFrame(self.parent, text="Progress")

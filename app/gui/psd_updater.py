@@ -862,26 +862,49 @@ class PSDDateUpdater:
         type17_layer = None
         datetime_layer = None
 
-        # First pass: analyze layer structure
-        for i, layer in enumerate(layers):
+        # First pass: try to find any text layer and existing datetime layer
+        found_text_layer = None
+        existing_datetime_layer = None
+
+        for layer in layers:
             try:
                 if hasattr(layer, "textItem") and layer.textItem:
-                    text_content = layer.textItem.contents
-                    # Check if it's a date/time layer by looking for date/time patterns
-                    if ("/" in text_content and "." in text_content) or (
-                        "\r" in text_content
-                    ):
-                        datetime_layer = layer
-                        # Check if the previous layer is Type 17
-                        if i > 0 and layers[i - 1].kind == 17:
-                            has_type17_above_datetime = True
-                            type17_layer = layers[i - 1]
-                if datetime_layer and type17_layer:
-                    break
+                    text_content = layer.textItem.contents.strip()
+                    if text_content:
+                        # Look for datetime pattern in the text
+                        is_datetime = False
+                        if ("/" in text_content and "." in text_content) or (
+                            "-" in text_content and ":" in text_content
+                        ):
+                            existing_datetime_layer = layer
+                            is_datetime = True
+                        elif not found_text_layer and not is_datetime:
+                            found_text_layer = layer
             except Exception:
                 continue
 
-        # Second pass: process text layers
+        # If we have a text layer but no datetime, update it
+        if found_text_layer and not existing_datetime_layer:
+            try:
+                # Get current time or use custom time
+                if self.custom_time.get().strip():
+                    time_part = self.custom_time.get().replace(".", ":")
+                else:
+                    now = datetime.now()
+                    time_part = f"{now.hour:02d}:{now.minute:02d}"
+
+                # Update the text layer with date/time/location
+                if self._update_text_layer(found_text_layer.textItem, today, time_part):
+                    text_layers_updated = True
+                    self.results_text.insert(
+                        tk.END,
+                        f"Added date/time/location to existing text layer: {found_text_layer.name}\n",
+                    )
+
+            except Exception as update_error:
+                self.status.set(f"Error updating text layer: {str(update_error)}")
+
+        # Process existing datetime layers as before
         for layer in layers:
             try:
                 if hasattr(layer, "textItem"):
@@ -890,26 +913,28 @@ class PSDDateUpdater:
                         continue
 
                     current_text = text_item.contents
-                    # Try to extract date and time
+                    should_update = False
+                    time_part = None
+
+                    # Check if this is a datetime layer
                     if "/" in current_text and "." in current_text:
                         # New format
                         first_line = current_text.split("\r")[0]
                         date_time = first_line.split()
                         if len(date_time) == 2:
                             time_part = date_time[1].replace(".", ":")
-                            if ":" in time_part:
-                                if self._update_text_layer(text_item, today, time_part):
-                                    text_layers_updated = True
-                    else:
-                        # Old format
-                        normalized_text = current_text.replace("\r", " ").replace(
-                            "\n", " "
-                        )
-                        parts = normalized_text.split()
-                        if len(parts) == 2 and ":" in parts[1]:
-                            time_part = parts[1]
-                            if self._update_text_layer(text_item, today, time_part):
-                                text_layers_updated = True
+                            should_update = True
+                    elif "\r" in current_text or "\n" in current_text:
+                        # Old format or multi-line text
+                        normalized_text = current_text.replace("\r", "\n")
+                        lines = [l.strip() for l in normalized_text.split("\n")]
+                        if len(lines) >= 2 and (":" in lines[1] or "." in lines[1]):
+                            time_part = lines[1].replace(".", ":")
+                            should_update = True
+
+                    if should_update:
+                        if self._update_text_layer(text_item, today, time_part):
+                            text_layers_updated = True
 
             except Exception as update_error:
                 self.status.set(f"Error updating layer: {str(update_error)}")
