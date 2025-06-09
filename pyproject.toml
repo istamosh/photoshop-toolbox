@@ -12,4 +12,5 @@ dependencies = [
     "imagehash>=4.3.1",
     "photoshop-python-api>=0.24.1",
     "pywin32>=306",
+    "pyyaml>=6.0.2",
 ]

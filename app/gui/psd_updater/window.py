@@ -9,6 +9,7 @@ from .models import TimeInfo, LocationInfo
 from .processor import TextLayerProcessor, DocumentProcessor
 from .constants import DateTimeFormats
 from .tooltip import ToolTip
+from .location_storage import LocationStorage
 
 
 class PSDUpdaterWindow:
@@ -17,6 +18,7 @@ class PSDUpdaterWindow:
     def __init__(self, parent):
         self.parent = parent
         self._init_variables()
+        self.location_storage = LocationStorage()  # Initialize location storage
         self._create_widgets()
 
     def _init_variables(self):
@@ -77,6 +79,24 @@ class PSDUpdaterWindow:
 
     def _create_location_content(self, parent):
         """Create location information content."""
+        # Location dropdown section
+        dropdown_frame = ttk.Frame(parent)
+        dropdown_frame.pack(fill="x", padx=5, pady=(0, 5))
+        ttk.Label(dropdown_frame, text="Select Location:").pack(
+            side="left", padx=(0, 5)
+        )
+
+        # Create and configure the combobox
+        self.location_combobox = ttk.Combobox(
+            dropdown_frame, width=40, state="readonly"
+        )
+        self.location_combobox.pack(side="left", fill="x", expand=True)
+        self._update_location_dropdown()
+
+        # Bind selection event
+        self.location_combobox.bind("<<ComboboxSelected>>", self._on_location_selected)
+
+        # Help text for manual entry
         help_text = (
             "Enter location details (one per line):\n"
             "Street Name\nWard\nSubdistrict\nDistrict\n"
@@ -94,6 +114,61 @@ class PSDUpdaterWindow:
         )
         scrollbar.pack(side="right", fill="y")
         self.location_text.configure(yscrollcommand=scrollbar.set)
+
+        # Save button
+        save_button = ttk.Button(
+            parent, text="Save Location", command=self._save_location
+        )
+        save_button.pack(pady=(5, 0))
+
+    def _update_location_dropdown(self):
+        """Update the location dropdown with stored locations."""
+        locations = self.location_storage.load_locations()
+        # Create display strings for each location
+        display_texts = []
+        self._location_map = {}  # Store mapping of display text to location dict
+
+        for location in locations:
+            # Create a display text that shows street and company
+            display_text = f"{location['street']} - {location['company']}"
+            display_texts.append(display_text)
+            self._location_map[display_text] = location
+
+        self.location_combobox["values"] = display_texts
+        if display_texts:
+            self.location_combobox.set("Select a location...")
+
+    def _on_location_selected(self, event):
+        """Handle location selection from dropdown."""
+        selected = self.location_combobox.get()
+        if selected and selected != "Select a location...":
+            location = self._location_map.get(selected)
+            if location:
+                # Clear existing text and insert new location details
+                self.location_text.delete("1.0", tk.END)
+                location_text = "\n".join(
+                    location[field]
+                    for field in [
+                        "street",
+                        "ward",
+                        "subdistrict",
+                        "district",
+                        "province",
+                        "company",
+                    ]
+                    if location[field]
+                )
+                self.location_text.insert("1.0", location_text)
+
+    def _save_location(self):
+        """Save the current location to storage."""
+        location_text = self.location_text.get("1.0", "end-1c").strip()
+        if location_text:
+            if self.location_storage.add_location(location_text):
+                self.status.set("Location saved successfully")
+                self._update_location_dropdown()
+            else:
+                self.status.set("Location already exists")
 
     def _create_file_section(self):
         """Create file selection section."""
