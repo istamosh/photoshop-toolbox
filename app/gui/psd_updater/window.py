@@ -8,6 +8,7 @@ from photoshop import Session
 from .models import TimeInfo, LocationInfo
 from .processor import TextLayerProcessor, DocumentProcessor
 from .constants import DateTimeFormats
+from .tooltip import ToolTip
 
 
 class PSDUpdaterWindow:
@@ -33,11 +34,66 @@ class PSDUpdaterWindow:
         """Create and arrange UI widgets."""
         # Create main sections
         self._create_file_section()
-        self._create_datetime_section()
-        self._create_location_section()
+
+        # Create a container frame for datetime and location sections
+        container_frame = ttk.Frame(self.parent)
+        container_frame.pack(fill="x", padx=5, pady=5)
+
+        # Create datetime section in left half
+        datetime_frame = ttk.LabelFrame(
+            container_frame, text="Custom Date/Time (Optional)", padding=10
+        )
+        datetime_frame.pack(side="left", fill="both", expand=True, padx=(0, 2.5))
+        self._create_datetime_content(datetime_frame)
+
+        # Create location section in right half
+        location_frame = ttk.LabelFrame(
+            container_frame, text="Location Information", padding=10
+        )
+        location_frame.pack(side="left", fill="both", expand=True, padx=(2.5, 0))
+        self._create_location_content(location_frame)
+
         self._create_progress_section()
         self._create_action_buttons()
         self._create_results_area()
+
+    def _create_datetime_content(self, parent):
+        """Create date/time input content."""
+        # Date field
+        date_frame = ttk.Frame(parent)
+        date_frame.pack(fill="x", pady=2)
+        ttk.Label(date_frame, text="Date (DD/MM/YYYY):").pack(side="left", padx=5)
+        date_entry = ttk.Entry(date_frame, textvariable=self.custom_date, width=15)
+        date_entry.pack(side="left", padx=5)
+        ToolTip(date_entry, "Leave empty to use current date")
+
+        # Time field
+        time_frame = ttk.Frame(parent)
+        time_frame.pack(fill="x", pady=(10, 2))
+        ttk.Label(time_frame, text="Time (HH.MM):").pack(side="left", padx=5)
+        time_entry = ttk.Entry(time_frame, textvariable=self.custom_time, width=10)
+        time_entry.pack(side="left", padx=5)
+        ToolTip(time_entry, "Leave empty to keep existing time")
+
+    def _create_location_content(self, parent):
+        """Create location information content."""
+        help_text = (
+            "Enter location details (one per line):\n"
+            "Street Name\nWard\nSubdistrict\nDistrict\n"
+            "Province\nCompany Name"
+        )
+        ttk.Label(parent, text=help_text).pack(anchor="w", padx=5, pady=(0, 5))
+
+        # Text area with scrollbar
+        text_frame = ttk.Frame(parent)
+        text_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.location_text = tk.Text(text_frame, height=6, width=30)
+        self.location_text.pack(side="left", fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(
+            text_frame, orient="vertical", command=self.location_text.yview
+        )
+        scrollbar.pack(side="right", fill="y")
+        self.location_text.configure(yscrollcommand=scrollbar.set)
 
     def _create_file_section(self):
         """Create file selection section."""
@@ -70,60 +126,6 @@ class PSDUpdaterWindow:
         ttk.Button(output_frame, text="Browse", command=self._browse_output_dir).pack(
             side="left", padx=5
         )
-
-    def _create_datetime_section(self):
-        """Create date/time input section."""
-        datetime_frame = ttk.LabelFrame(
-            self.parent, text="Custom Date/Time (Optional)", padding=10
-        )
-        datetime_frame.pack(fill="x", padx=5, pady=5)
-
-        # Date field
-        date_frame = ttk.Frame(datetime_frame)
-        date_frame.pack(fill="x", pady=2)
-        ttk.Label(date_frame, text="Date (DD/MM/YYYY):").pack(side="left", padx=5)
-        ttk.Entry(date_frame, textvariable=self.custom_date, width=15).pack(
-            side="left", padx=5
-        )
-        ttk.Label(date_frame, text="(Leave empty to use current date)").pack(
-            side="left", padx=5
-        )
-
-        # Time field
-        time_frame = ttk.Frame(datetime_frame)
-        time_frame.pack(fill="x", pady=2)
-        ttk.Label(time_frame, text="Time (HH.MM):").pack(side="left", padx=5)
-        ttk.Entry(time_frame, textvariable=self.custom_time, width=10).pack(
-            side="left", padx=5
-        )
-        ttk.Label(time_frame, text="(Leave empty to keep existing time)").pack(
-            side="left", padx=5
-        )
-
-    def _create_location_section(self):
-        """Create location information section."""
-        info_frame = ttk.LabelFrame(
-            self.parent, text="Location Information", padding=10
-        )
-        info_frame.pack(fill="x", padx=5, pady=5)
-
-        help_text = (
-            "Enter location details (one per line):\n"
-            "Street Name\nWard\nSubdistrict\nDistrict\n"
-            "Province\nCompany Name"
-        )
-        ttk.Label(info_frame, text=help_text).pack(anchor="w", padx=5, pady=(0, 5))
-
-        # Text area with scrollbar
-        text_frame = ttk.Frame(info_frame)
-        text_frame.pack(fill="x", expand=True, padx=5, pady=5)
-        self.location_text = tk.Text(text_frame, height=6, width=50)
-        self.location_text.pack(side="left", fill="x", expand=True)
-        scrollbar = ttk.Scrollbar(
-            text_frame, orient="vertical", command=self.location_text.yview
-        )
-        scrollbar.pack(side="right", fill="y")
-        self.location_text.configure(yscrollcommand=scrollbar.set)
 
     def _create_progress_section(self):
         """Create progress bar and status section."""
