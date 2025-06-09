@@ -50,8 +50,7 @@ class PSDDateUpdater(PSDUpdaterWindow):
 
             # Use custom date if provided and valid
             final_date = (
-                custom_date
-                if custom_date and len(custom_date.split("/")) == 3
+                custom_date if custom_date and len(custom_date.split("/")) == 3
                 else today.replace("-", "/")
             )
 
@@ -60,7 +59,7 @@ class PSDDateUpdater(PSDUpdaterWindow):
                 text_item,
                 final_date,
                 final_time,
-                location_info.as_list if location_info else None,
+                location_info.as_list if location_info else None
             )
 
             return result
@@ -577,18 +576,12 @@ class PSDDateUpdater(PSDUpdaterWindow):
 
             # Normalize content
             normalized_content = text_content.replace("\r", "\n")
-            lines = [
-                line.strip() for line in normalized_content.split("\n") if line.strip()
-            ]
+            lines = [line.strip() for line in normalized_content.split("\n") if line.strip()]
 
             # Check if this might be a datetime layer
             if len(lines) >= 1:
                 # Handle old format (separate date and time lines)
-                if (
-                    len(lines) == 2
-                    and ("-" in lines[0] or "/" in lines[0])
-                    and ":" in lines[1]
-                ):
+                if len(lines) == 2 and ("-" in lines[0] or "/" in lines[0]) and ":" in lines[1]:
                     date_part = lines[0].replace("-", "/")
                     time_part = lines[1].replace(":", ".")
                     self.custom_date.set(date_part)
@@ -596,11 +589,7 @@ class PSDDateUpdater(PSDUpdaterWindow):
                     self.location_text.delete("1.0", tk.END)
 
                 # Handle new format (date time on first line, locations follow)
-                elif (
-                    " " in lines[0]
-                    and ("/" in lines[0] or "-" in lines[0])
-                    and ("." in lines[0] or ":" in lines[0])
-                ):
+                elif " " in lines[0] and ("/" in lines[0] or "-" in lines[0]) and ("." in lines[0] or ":" in lines[0]):
                     date_time = lines[0].split(" ")
                     if len(date_time) == 2:
                         date_part = date_time[0].replace("-", "/")
@@ -613,17 +602,13 @@ class PSDDateUpdater(PSDUpdaterWindow):
                             location_info = LocationInfo.from_text("\n".join(lines[1:]))
                             self.location_text.delete("1.0", tk.END)
                             if location_info:
-                                self.location_text.insert(
-                                    "1.0", "\n".join(location_info.as_list)
-                                )
+                                self.location_text.insert("1.0", "\n".join(location_info.as_list))
 
             # Display properties
             for prop in ["font", "size", "justification"]:
                 try:
                     value = getattr(text_item, prop)
-                    self.results_text.insert(
-                        tk.END, f"  {prop.capitalize()}: {value}\n"
-                    )
+                    self.results_text.insert(tk.END, f"  {prop.capitalize()}: {value}\n")
                 except:
                     pass
 
@@ -649,9 +634,7 @@ class PSDDateUpdater(PSDUpdaterWindow):
                     text_content = layer.textItem.contents.strip()
                     if text_content:
                         # Check for datetime pattern
-                        if ("/" in text_content and "." in text_content) or (
-                            "-" in text_content and ":" in text_content
-                        ):
+                        if ("/" in text_content and "." in text_content) or ("-" in text_content and ":" in text_content):
                             existing_datetime_layer = layer
                         elif not found_text_layer:
                             found_text_layer = layer
@@ -672,7 +655,7 @@ class PSDDateUpdater(PSDUpdaterWindow):
                     text_layers_updated = True
                     self.results_text.insert(
                         tk.END,
-                        f"Added date/time/location to existing text layer: {found_text_layer.name}\n",
+                        f"Added date/time/location to existing text layer: {found_text_layer.name}\n"
                     )
             except Exception as e:
                 self.status.set(f"Error updating text layer: {str(e)}")

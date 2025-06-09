@@ -1,0 +1,221 @@
+"""Main UI window for PSD updater."""
+
+import os
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from datetime import datetime
+from photoshop import Session
+from .models import TimeInfo, LocationInfo
+from .processor import TextLayerProcessor, DocumentProcessor
+from .constants import DateTimeFormats
+
+
+class PSDUpdaterWindow:
+    """Main window for the PSD file date updater."""
+
+    def __init__(self, parent):
+        self.parent = parent
+        self._init_variables()
+        self._create_widgets()
+
+    def _init_variables(self):
+        """Initialize instance variables."""
+        self.status = tk.StringVar(value="Ready")
+        self.psd_file_path = tk.StringVar()
+        self.output_dir = tk.StringVar()
+        self.custom_date = tk.StringVar()
+        self.custom_time = tk.StringVar()
+        self.progress = tk.DoubleVar(value=0.0)
+        self.is_processing = False
+        self.current_batch_time = None
+
+    def _create_widgets(self):
+        """Create and arrange UI widgets."""
+        # Create main sections
+        self._create_file_section()
+        self._create_datetime_section()
+        self._create_location_section()
+        self._create_progress_section()
+        self._create_action_buttons()
+        self._create_results_area()
+
+    def _create_file_section(self):
+        """Create file selection section."""
+        file_frame = ttk.Frame(self.parent)
+        file_frame.pack(fill="x", pady=5)
+
+        # File selection
+        ttk.Label(file_frame, text="PSD File/Folder:").pack(side="left", padx=5)
+        ttk.Entry(file_frame, textvariable=self.psd_file_path, width=50).pack(
+            side="left", padx=5
+        )
+
+        # Browse buttons
+        browse_frame = ttk.Frame(file_frame)
+        browse_frame.pack(side="left")
+        ttk.Button(
+            browse_frame, text="Browse File", command=self._browse_psd_file
+        ).pack(side="left", padx=5)
+        ttk.Button(
+            browse_frame, text="Browse Folder", command=self._browse_psd_folder
+        ).pack(side="left", padx=5)
+
+        # Output directory
+        output_frame = ttk.Frame(self.parent)
+        output_frame.pack(fill="x", pady=5)
+        ttk.Label(output_frame, text="Working Folder:").pack(side="left", padx=5)
+        ttk.Entry(output_frame, textvariable=self.output_dir, width=50).pack(
+            side="left", padx=5
+        )
+        ttk.Button(output_frame, text="Browse", command=self._browse_output_dir).pack(
+            side="left", padx=5
+        )
+
+    def _create_datetime_section(self):
+        """Create date/time input section."""
+        datetime_frame = ttk.LabelFrame(
+            self.parent, text="Custom Date/Time (Optional)", padding=10
+        )
+        datetime_frame.pack(fill="x", padx=5, pady=5)
+
+        # Date field
+        date_frame = ttk.Frame(datetime_frame)
+        date_frame.pack(fill="x", pady=2)
+        ttk.Label(date_frame, text="Date (DD/MM/YYYY):").pack(side="left", padx=5)
+        ttk.Entry(date_frame, textvariable=self.custom_date, width=15).pack(
+            side="left", padx=5
+        )
+        ttk.Label(date_frame, text="(Leave empty to use current date)").pack(
+            side="left", padx=5
+        )
+
+        # Time field
+        time_frame = ttk.Frame(datetime_frame)
+        time_frame.pack(fill="x", pady=2)
+        ttk.Label(time_frame, text="Time (HH.MM):").pack(side="left", padx=5)
+        ttk.Entry(time_frame, textvariable=self.custom_time, width=10).pack(
+            side="left", padx=5
+        )
+        ttk.Label(time_frame, text="(Leave empty to keep existing time)").pack(
+            side="left", padx=5
+        )
+
+    def _create_location_section(self):
+        """Create location information section."""
+        info_frame = ttk.LabelFrame(
+            self.parent, text="Location Information", padding=10
+        )
+        info_frame.pack(fill="x", padx=5, pady=5)
+
+        help_text = (
+            "Enter location details (one per line):\n"
+            "Street Name\nWard\nSubdistrict\nDistrict\n"
+            "Province\nCompany Name"
+        )
+        ttk.Label(info_frame, text=help_text).pack(anchor="w", padx=5, pady=(0, 5))
+
+        # Text area with scrollbar
+        text_frame = ttk.Frame(info_frame)
+        text_frame.pack(fill="x", expand=True, padx=5, pady=5)
+        self.location_text = tk.Text(text_frame, height=6, width=50)
+        self.location_text.pack(side="left", fill="x", expand=True)
+        scrollbar = ttk.Scrollbar(
+            text_frame, orient="vertical", command=self.location_text.yview
+        )
+        scrollbar.pack(side="right", fill="y")
+        self.location_text.configure(yscrollcommand=scrollbar.set)
+
+    def _create_progress_section(self):
+        """Create progress bar and status section."""
+        progress_frame = ttk.Frame(self.parent)
+        progress_frame.pack(fill="x", pady=5, padx=10)
+        self.progress_bar = ttk.Progressbar(
+            progress_frame, mode="determinate", variable=self.progress, length=300
+        )
+        self.progress_bar.pack(fill="x", expand=True)
+        ttk.Label(self.parent, textvariable=self.status).pack(pady=10)
+
+    def _create_action_buttons(self):
+        """Create action buttons."""
+        button_frame = ttk.Frame(self.parent)
+        button_frame.pack(pady=10)
+        self.analyze_button = ttk.Button(
+            button_frame, text="Analyze", command=self.analyze_files
+        )
+        self.analyze_button.pack(side="left", padx=5)
+        self.update_button = ttk.Button(
+            button_frame, text="Update Date", command=self.update_date, state="disabled"
+        )
+        self.update_button.pack(side="left", padx=5)
+        self.cancel_button = ttk.Button(
+            button_frame,
+            text="Cancel",
+            command=self.cancel_processing,
+            state="disabled",
+        )
+        self.cancel_button.pack(side="left", padx=5)
+
+    def _create_results_area(self):
+        """Create results text area."""
+        self.results_text = tk.Text(self.parent, height=15, width=70)
+        self.results_text.pack(pady=10, padx=5)
+
+    def _browse_psd_file(self):
+        """Open file dialog for selecting PSD file."""
+        filename = filedialog.askopenfilename(
+            title="Select PSD File", filetypes=[("Photoshop Files", "*.psd")]
+        )
+        if filename:
+            self.psd_file_path.set(filename)
+            self.status.set(f"Selected file: {os.path.basename(filename)}")
+            self.update_button.configure(state="disabled")
+            self.results_text.delete(1.0, tk.END)
+
+    def _browse_psd_folder(self):
+        """Open folder dialog for selecting directory with PSD files."""
+        folder = filedialog.askdirectory(title="Select Folder with PSD Files")
+        if folder:
+            self.psd_file_path.set(folder)
+            self.status.set(f"Selected folder: {os.path.basename(folder)}")
+            self.update_button.configure(state="disabled")
+            self.results_text.delete(1.0, tk.END)
+
+    def _browse_output_dir(self):
+        """Open folder dialog for selecting output directory."""
+        directory = filedialog.askdirectory(title="Select Working Folder for Output")
+        if directory:
+            self.output_dir.set(directory)
+            self.status.set(f"Selected working folder: {os.path.basename(directory)}")
+
+    def _get_next_output_folder(self):
+        """Get next available numbered folder in output directory."""
+        base_dir = self.output_dir.get()
+        if not base_dir:
+            return None
+
+        counter = 1
+        while True:
+            folder_name = str(counter)
+            folder_path = os.path.join(base_dir, folder_name)
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
+                return folder_path
+            counter += 1
+
+    def analyze_files(self):
+        """Handle analyze files button click."""
+        raise NotImplementedError("Subclass must implement analyze_files")
+
+    def update_date(self):
+        """Handle update date button click."""
+        raise NotImplementedError("Subclass must implement update_date")
+
+    def cancel_processing(self):
+        """Handle cancel button click."""
+        if self.is_processing:
+            self.is_processing = False
+            self.status.set("Processing cancelled")
+            self.progress.set(0)
+            self.analyze_button.configure(state="normal")
+            self.update_button.configure(state="disabled")
+            self.cancel_button.configure(state="disabled")
