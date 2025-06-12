@@ -82,19 +82,15 @@ class PSDUpdaterWindow:
         # Location dropdown section
         dropdown_frame = ttk.Frame(parent)
         dropdown_frame.pack(fill="x", padx=5, pady=(0, 5))
-        ttk.Label(dropdown_frame, text="Select Location:").pack(
-            side="left", padx=(0, 5)
-        )
+        ttk.Label(dropdown_frame, text="Select Location:").pack(side="left", padx=(0, 5))
 
         # Create and configure the combobox
-        self.location_combobox = ttk.Combobox(
-            dropdown_frame, width=40, state="readonly"
-        )
+        self.location_combobox = ttk.Combobox(dropdown_frame, width=40, state='readonly')
         self.location_combobox.pack(side="left", fill="x", expand=True)
         self._update_location_dropdown()
 
         # Bind selection event
-        self.location_combobox.bind("<<ComboboxSelected>>", self._on_location_selected)
+        self.location_combobox.bind('<<ComboboxSelected>>', self._on_location_selected)
 
         # Help text for manual entry
         help_text = (
@@ -115,11 +111,21 @@ class PSDUpdaterWindow:
         scrollbar.pack(side="right", fill="y")
         self.location_text.configure(yscrollcommand=scrollbar.set)
 
+        # Button frame for save and delete
+        button_frame = ttk.Frame(parent)
+        button_frame.pack(pady=(5, 0))
+        
         # Save button
         save_button = ttk.Button(
-            parent, text="Save Location", command=self._save_location
+            button_frame, text="Save Location", command=self._save_location
         )
-        save_button.pack(pady=(5, 0))
+        save_button.pack(side="left", padx=5)
+        
+        # Delete button
+        delete_button = ttk.Button(
+            button_frame, text="Delete Location", command=self._delete_location
+        )
+        delete_button.pack(side="left", padx=5)
 
     def _update_location_dropdown(self):
         """Update the location dropdown with stored locations."""
@@ -169,6 +175,19 @@ class PSDUpdaterWindow:
                 self._update_location_dropdown()
             else:
                 self.status.set("Location already exists")
+
+    def _delete_location(self):
+        """Delete the current location from storage."""
+        location_text = self.location_text.get('1.0', 'end-1c').strip()
+        if location_text:
+            if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this location?"):
+                if self.location_storage.delete_location(location_text):
+                    self.status.set("Location deleted successfully")
+                    self.location_text.delete('1.0', tk.END)
+                    self._update_location_dropdown()
+                    self.location_combobox.set("Select a location...")
+                else:
+                    self.status.set("Location not found")
 
     def _create_file_section(self):
         """Create file selection section."""

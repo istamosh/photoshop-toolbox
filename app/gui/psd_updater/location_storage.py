@@ -77,3 +77,30 @@ class LocationStorage:
     def format_location(self, location: Dict[str, str]) -> str:
         """Format a location dictionary as a string."""
         return "\n".join(str(value) for value in location.values() if value)
+
+    def delete_location(self, location_text: str) -> bool:
+        """Delete a location from storage."""
+        # Split the text into lines and remove empty lines
+        lines = [line.strip() for line in location_text.split("\n") if line.strip()]
+        if not lines:
+            return False
+
+        # Create location dictionary
+        fields = ["street", "ward", "subdistrict", "district", "province", "company"]
+        location = {}
+        for i, field in enumerate(fields):
+            if i < len(lines):
+                location[field] = lines[i]
+            else:
+                location[field] = ""
+
+        # Load existing locations
+        locations = self.load_locations()
+
+        # Look for the location to delete
+        for i, loc in enumerate(locations):
+            if all(loc.get(key) == value for key, value in location.items() if value):
+                locations.pop(i)
+                self.save_locations(locations)
+                return True
+        return False
