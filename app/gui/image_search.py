@@ -20,6 +20,7 @@ class ImageSearchApp:
         self.threshold = tk.DoubleVar(value=90)  # Default threshold 90% similarity
         self.hash_type = tk.StringVar(value="phash")  # Default hash type
         self.status = tk.StringVar(value="Ready")
+        self.stop_on_first_match = tk.BooleanVar(value=False)  # New variable
         self.is_searching = False
         self.search_thread = None
         self.result_queue = queue.Queue()
@@ -60,7 +61,16 @@ class ImageSearchApp:
         hash_types = ttk.Combobox(
             self.parent, textvariable=self.hash_type, values=["phash", "ahash"]
         )
-        hash_types.grid(row=2, column=1, sticky="w", padx=5)  # Threshold slider
+        hash_types.grid(row=2, column=1, sticky="w", padx=5)
+
+        # Stop on first match checkbox
+        ttk.Checkbutton(
+            self.parent,
+            text="Stop on First Match",
+            variable=self.stop_on_first_match,
+        ).grid(row=2, column=2, sticky="w", padx=5)
+
+        # Threshold slider
         threshold_frame = ttk.LabelFrame(self.parent, text="Similarity Threshold")
         threshold_frame.grid(row=3, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
 
@@ -253,10 +263,9 @@ class ImageSearchApp:
         try:
             reference_path = self.reference_image_path.get()
             search_dir = self.search_directory.get()
-            threshold = float(
-                self.threshold.get()
-            )  # Now represents similarity threshold directly
+            threshold = float(self.threshold.get())
             hash_type = self.hash_type.get()
+            stop_on_first = self.stop_on_first_match.get()
 
             # Calculate reference image hash
             self.result_queue.put(("status", "Processing reference image..."))
@@ -303,20 +312,34 @@ class ImageSearchApp:
                             )
                             if similarity >= threshold:
                                 similar_images.append((img_path, similarity))
+                                if stop_on_first:
+                                    # If we want to stop on first match, break both loops
+                                    self.result_queue.put(
+                                        (
+                                            "status",
+                                            "Found first match, stopping search...",
+                                        )
+                                    )
+                                    break
+
+                if stop_on_first and similar_images:
+                    break  # Break outer loop if we found a match and want to stop
 
             # Sort and display results
             if self.is_searching:  # Only show results if not cancelled
                 similar_images.sort(
                     key=lambda x: x[1], reverse=True
-                )  # Sort by similarity (highest first)
+                )  # Sort by similarity
                 if similar_images:
-                    self.result_queue.put(
-                        ("result", f"Found {len(similar_images)} similar images:\n\n")
+                    result_count = (
+                        "first matching image"
+                        if stop_on_first
+                        else f"{len(similar_images)} similar images"
                     )
+                    self.result_queue.put(("result", f"Found {result_count}:\n\n"))
                     for path, similarity in similar_images:
                         result_text = f"Similarity: {similarity:.1f}%\nPath: "
                         self.result_queue.put(("result", result_text))
-                        # Add clickable path with tag
                         self.result_queue.put(("path_link", path))
                         self.result_queue.put(("result", "\n\n"))
                 else:
@@ -327,12 +350,12 @@ class ImageSearchApp:
                         )
                     )
 
-                self.result_queue.put(
-                    (
-                        "status",
-                        f"Search complete. Found {len(similar_images)} similar images out of {total_processed} processed.",
-                    )
-                )
+                status_msg = f"Search complete. "
+                if stop_on_first and similar_images:
+                    status_msg += f"Stopped after finding first match (processed {total_processed} images)."
+                else:
+                    status_msg += f"Found {len(similar_images)} similar images out of {total_processed} processed."
+                self.result_queue.put(("status", status_msg))
 
         except Exception as e:
             self.result_queue.put(("error", str(e)))
