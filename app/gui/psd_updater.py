@@ -4,6 +4,7 @@ __all__ = ["PSDDateUpdater"]
 
 import os
 import time
+import random
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
@@ -46,7 +47,6 @@ class PSDDateUpdater(PSDUpdaterWindow):
                 final_time = time_info.formatted
             else:
                 # Generate time with randomized seconds for non-batch processing
-                import random
                 now = datetime.now()
                 random_seconds = random.randint(Secondhand.MIN, Secondhand.MAX)
                 final_time = f"{now.hour:02d}.{now.minute:02d}.{random_seconds:02d}"

@@ -16,13 +16,21 @@ class TimeInfo:
     second: int = 0
 
     def increment(self):
-        """Increment time by one minute with randomized seconds."""
-        self.minute += 1
-        if self.minute >= 60:
-            self.hour = (self.hour + 1) % 24
-            self.minute = 0
-        # Randomize seconds
-        self.second = random.randint(Secondhand.MIN, Secondhand.MAX)
+        """Increment seconds by randomized gap (10-15 seconds)."""
+        # Add randomized seconds gap
+        self.second += random.randint(Secondhand.MIN, Secondhand.MAX)
+        
+        # Handle overflow
+        if self.second >= 60:
+            extra_minutes = self.second // 60
+            self.second = self.second % 60
+            self.minute += extra_minutes
+            
+            if self.minute >= 60:
+                extra_hours = self.minute // 60
+                self.minute = self.minute % 60
+                self.hour = (self.hour + extra_hours) % 24
+        
         return self
 
     @property
@@ -36,7 +44,15 @@ class TimeInfo:
         parts = time_str.split(".")
         hour = int(parts[0])
         minute = int(parts[1])
-        second = int(parts[2]) if len(parts) > 2 else random.randint(Secondhand.MIN, Secondhand.MAX)
+        
+        if len(parts) > 2:
+            # If seconds are provided, use them
+            second = int(parts[2])
+        else:
+            # If no seconds provided (old format), start from 00
+            # This ensures consistent starting point for batch processing
+            second = 0
+            
         return cls(hour, minute, second)
 
 
