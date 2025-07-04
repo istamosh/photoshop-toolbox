@@ -306,7 +306,15 @@ class PSDDateUpdater(PSDUpdaterWindow):
             with Session() as ps:
                 app = ps.app  # Get the Photoshop application object
                 doc = app.open(file_path)  # Open document through app object
-                today = datetime.today().strftime("%d-%m-%Y")
+                
+                # Use custom date if provided, otherwise use today's date
+                custom_date = self.custom_date.get().strip()
+                if custom_date and len(custom_date.split("/")) == 3:
+                    # Use custom date and convert it to the internal format for processing
+                    date_parts = custom_date.split("/")
+                    today = f"{date_parts[0]}-{date_parts[1]}-{date_parts[2]}"
+                else:
+                    today = datetime.today().strftime("%d-%m-%Y")
 
                 text_layers_updated = self._process_layers(doc, today)
 
