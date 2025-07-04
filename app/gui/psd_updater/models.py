@@ -1,8 +1,10 @@
 """Data models for PSD update functionality."""
 
+import random
 from dataclasses import dataclass
 from typing import List, Optional
 from datetime import datetime
+from .constants import DateTimeFormats, Secondhand
 
 
 @dataclass
@@ -11,25 +13,31 @@ class TimeInfo:
 
     hour: int
     minute: int
+    second: int = 0
 
     def increment(self):
-        """Increment time by one minute."""
+        """Increment time by one minute with randomized seconds."""
         self.minute += 1
         if self.minute >= 60:
             self.hour = (self.hour + 1) % 24
             self.minute = 0
+        # Randomize seconds
+        self.second = random.randint(Secondhand.MIN, Secondhand.MAX)
         return self
 
     @property
     def formatted(self) -> str:
         """Get formatted time string."""
-        return f"{self.hour:02d}.{self.minute:02d}"
+        return f"{self.hour:02d}.{self.minute:02d}.{self.second:02d}"
 
     @classmethod
     def from_string(cls, time_str: str) -> "TimeInfo":
-        """Create TimeInfo from string format (HH.MM)."""
-        hour, minute = map(int, time_str.split("."))
-        return cls(hour, minute)
+        """Create TimeInfo from string format (HH.MM or HH.MM.SS)."""
+        parts = time_str.split(".")
+        hour = int(parts[0])
+        minute = int(parts[1])
+        second = int(parts[2]) if len(parts) > 2 else random.randint(Secondhand.MIN, Secondhand.MAX)
+        return cls(hour, minute, second)
 
 
 @dataclass
@@ -65,3 +73,26 @@ class LocationInfo:
         lines = [line.strip() for line in text.split("\n") if line.strip()]
         fields = lines + [None] * (6 - len(lines))  # Pad with None if needed
         return cls(*fields[:6])  # Only take first 6 fields
+
+
+def format_date_with_month_name(date_str: str) -> str:
+    """Convert date from DD/MM/YYYY or DD-MM-YYYY to 'DD Month YYYY' format."""
+    try:
+        # Handle both "/" and "-" separators
+        if "/" in date_str:
+            day, month, year = date_str.split("/")
+        elif "-" in date_str:
+            day, month, year = date_str.split("-")
+        else:
+            # If it's already in the correct format, return as-is
+            return date_str
+
+        day = int(day)
+        month = int(month)
+        year = int(year)
+
+        month_name = DateTimeFormats.MONTH_NAMES.get(month, "Unknown")
+        return f"{day:02d} {month_name} {year}"
+    except (ValueError, KeyError):
+        # If parsing fails, return original string
+        return date_str

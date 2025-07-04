@@ -12,7 +12,7 @@ from photoshop import Session, Photoshop
 from .psd_updater.window import PSDUpdaterWindow
 from .psd_updater.models import TimeInfo, LocationInfo
 from .psd_updater.processor import TextLayerProcessor, DocumentProcessor
-from .psd_updater.constants import LayerKind, DateTimeFormats, TextSizing, Justification
+from .psd_updater.constants import LayerKind, DateTimeFormats, TextSizing, Justification, Secondhand
 
 
 class PSDDateUpdater(PSDUpdaterWindow):
@@ -45,15 +45,23 @@ class PSDDateUpdater(PSDUpdaterWindow):
                     self.current_batch_time = time_info
                 final_time = time_info.formatted
             else:
-                final_time = time_part.replace(":", ".")
+                # Generate time with randomized seconds for non-batch processing
+                import random
+                now = datetime.now()
+                random_seconds = random.randint(Secondhand.MIN, Secondhand.MAX)
+                final_time = f"{now.hour:02d}.{now.minute:02d}.{random_seconds:02d}"
                 self.current_batch_time = None
 
-            # Use custom date if provided and valid
-            final_date = (
-                custom_date
-                if custom_date and len(custom_date.split("/")) == 3
-                else today.replace("-", "/")
-            )
+            # Use custom date if provided and valid, format with month name
+            if custom_date and len(custom_date.split("/")) == 3:
+                from .psd_updater.models import format_date_with_month_name
+                final_date = format_date_with_month_name(custom_date)
+            else:
+                # Convert today's date to month name format
+                today_obj = datetime.strptime(today, "%d-%m-%Y")
+                from .psd_updater.constants import DateTimeFormats
+                month_name = DateTimeFormats.MONTH_NAMES[today_obj.month]
+                final_date = f"{today_obj.day:02d} {month_name} {today_obj.year}"
 
             # Update the text layer using the processor
             result = TextLayerProcessor.update_text_layer(
@@ -583,8 +591,41 @@ class PSDDateUpdater(PSDUpdaterWindow):
 
             # Check if this might be a datetime layer
             if len(lines) >= 1:
+                # Handle month name format (DD Month YYYY HH.MM.SS)
+                first_line_parts = lines[0].split()
+                if len(first_line_parts) >= 4:
+                    from .psd_updater.constants import DateTimeFormats
+                    month_names = list(DateTimeFormats.MONTH_NAMES.values())
+                    
+                    # Check if second part is a month name
+                    if len(first_line_parts) >= 4 and first_line_parts[1] in month_names:
+                        try:
+                            # Extract date and time from "DD Month YYYY HH.MM.SS" format
+                            day = first_line_parts[0]
+                            month_name = first_line_parts[1]
+                            year = first_line_parts[2]
+                            time_part = first_line_parts[3]
+                            
+                            # Convert month name to number
+                            month_num = next(k for k, v in DateTimeFormats.MONTH_NAMES.items() if v == month_name)
+                            date_part = f"{day}/{month_num:02d}/{year}"
+                            
+                            self.custom_date.set(date_part)
+                            self.custom_time.set(time_part)
+                            
+                            # Set location info if present
+                            if len(lines) > 1:
+                                location_info = LocationInfo.from_text("\n".join(lines[1:]))
+                                self.location_text.delete("1.0", tk.END)
+                                if location_info:
+                                    self.location_text.insert("1.0", "\n".join(location_info.as_list))
+                            else:
+                                self.location_text.delete("1.0", tk.END)
+                        except (ValueError, StopIteration):
+                            pass
+                
                 # Handle old format (separate date and time lines)
-                if (
+                elif (
                     len(lines) == 2
                     and ("-" in lines[0] or "/" in lines[0])
                     and ":" in lines[1]
@@ -595,7 +636,7 @@ class PSDDateUpdater(PSDUpdaterWindow):
                     self.custom_time.set(time_part)
                     self.location_text.delete("1.0", tk.END)
 
-                # Handle new format (date time on first line, locations follow)
+                # Handle old new format (date time on first line, locations follow)
                 elif (
                     " " in lines[0]
                     and ("/" in lines[0] or "-" in lines[0])
@@ -648,10 +689,27 @@ class PSDDateUpdater(PSDUpdaterWindow):
                 if hasattr(layer, "textItem") and layer.textItem:
                     text_content = layer.textItem.contents.strip()
                     if text_content:
-                        # Check for datetime pattern
-                        if ("/" in text_content and "." in text_content) or (
-                            "-" in text_content and ":" in text_content
-                        ):
+                        # Check for datetime pattern - support multiple formats:
+                        # New format: "DD Month YYYY HH.MM.SS"
+                        # Old formats: "/" in text and "." in text, or "-" in text and ":" in text
+                        is_datetime = False
+                        
+                        # Check for month name format
+                        from .psd_updater.constants import DateTimeFormats
+                        month_names = DateTimeFormats.MONTH_NAMES.values()
+                        for month_name in month_names:
+                            if month_name in text_content:
+                                is_datetime = True
+                                break
+                        
+                        # Check for old formats
+                        if not is_datetime:
+                            is_datetime = (
+                                ("/" in text_content and "." in text_content) or 
+                                ("-" in text_content and ":" in text_content)
+                            )
+                        
+                        if is_datetime:
                             existing_datetime_layer = layer
                         elif not found_text_layer:
                             found_text_layer = layer
@@ -686,20 +744,32 @@ class PSDDateUpdater(PSDUpdaterWindow):
                 time_part = None
 
                 # Check format and extract time
-                if "/" in current_text and "." in current_text:
-                    # New format
-                    first_line = current_text.split("\r")[0]
-                    date_time = first_line.split()
-                    if len(date_time) == 2:
-                        time_part = date_time[1].replace(".", ":")
+                first_line = current_text.split("\r")[0] if "\r" in current_text else current_text.split("\n")[0]
+                
+                # Check for month name format (DD Month YYYY HH.MM.SS)
+                parts = first_line.split()
+                if len(parts) >= 4:
+                    from .psd_updater.constants import DateTimeFormats
+                    month_names = list(DateTimeFormats.MONTH_NAMES.values())
+                    if parts[1] in month_names and "." in parts[3]:
+                        time_part = parts[3].replace(".", ":")
                         should_update = True
-                elif "\r" in current_text or "\n" in current_text:
-                    # Old format
-                    normalized_text = current_text.replace("\r", "\n")
-                    lines = [l.strip() for l in normalized_text.split("\n")]
-                    if len(lines) >= 2 and (":" in lines[1] or "." in lines[1]):
-                        time_part = lines[1].replace(".", ":")
-                        should_update = True
+                
+                # Check old formats if not month name format
+                if not should_update:
+                    if "/" in current_text and "." in current_text:
+                        # Old new format
+                        date_time = first_line.split()
+                        if len(date_time) == 2:
+                            time_part = date_time[1].replace(".", ":")
+                            should_update = True
+                    elif "\r" in current_text or "\n" in current_text:
+                        # Old format
+                        normalized_text = current_text.replace("\r", "\n")
+                        lines = [l.strip() for l in normalized_text.split("\n")]
+                        if len(lines) >= 2 and (":" in lines[1] or "." in lines[1]):
+                            time_part = lines[1].replace(".", ":")
+                            should_update = True
 
                 if should_update and time_part:
                     if self._update_text_layer(text_item, today, time_part):

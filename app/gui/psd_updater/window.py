@@ -67,15 +67,15 @@ class PSDUpdaterWindow:
         ttk.Label(date_frame, text="Date (DD/MM/YYYY):").pack(side="left", padx=5)
         date_entry = ttk.Entry(date_frame, textvariable=self.custom_date, width=15)
         date_entry.pack(side="left", padx=5)
-        ToolTip(date_entry, "Leave empty to use current date")
+        ToolTip(date_entry, "Will be formatted as 'DD Month YYYY' (e.g., 04 Juli 2025)")
 
         # Time field
         time_frame = ttk.Frame(parent)
         time_frame.pack(fill="x", pady=(10, 2))
-        ttk.Label(time_frame, text="Time (HH.MM):").pack(side="left", padx=5)
-        time_entry = ttk.Entry(time_frame, textvariable=self.custom_time, width=10)
+        ttk.Label(time_frame, text="Time (HH.MM.SS):").pack(side="left", padx=5)
+        time_entry = ttk.Entry(time_frame, textvariable=self.custom_time, width=12)
         time_entry.pack(side="left", padx=5)
-        ToolTip(time_entry, "Leave empty to keep existing time")
+        ToolTip(time_entry, "Format: HH.MM.SS or HH.MM (seconds will be randomized)")
 
     def _create_location_content(self, parent):
         """Create location information content."""
