@@ -409,12 +409,16 @@ class PSDDateUpdater(PSDUpdaterWindow):
                 final_time = time_part.replace(":", ".")
                 self.current_batch_time = None
 
-            # Use custom date if provided and valid
-            final_date = (
-                custom_date
-                if custom_date and len(custom_date.split("/")) == 3
-                else today.replace("-", "/")
-            )
+            # Use custom date if provided and valid, format with month name
+            if custom_date and len(custom_date.split("/")) == 3:
+                from .models import format_date_with_month_name
+                final_date = format_date_with_month_name(custom_date)
+            else:
+                # Convert today's date to month name format
+                today_obj = datetime.strptime(today, "%d-%m-%Y")
+                from .constants import DateTimeFormats
+                month_name = DateTimeFormats.MONTH_NAMES[today_obj.month]
+                final_date = f"{today_obj.day:02d} {month_name} {today_obj.year}"
 
             # Update the text layer using the processor
             result = TextLayerProcessor.update_text_layer(

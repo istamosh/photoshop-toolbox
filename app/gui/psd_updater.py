@@ -312,6 +312,8 @@ class PSDDateUpdater(PSDUpdaterWindow):
                 if custom_date and len(custom_date.split("/")) == 3:
                     # Use custom date and convert it to the internal format for processing
                     date_parts = custom_date.split("/")
+                    # Keep the DD-MM-YYYY format for internal processing
+                    # The actual formatting to month names happens in _update_text_layer
                     today = f"{date_parts[0]}-{date_parts[1]}-{date_parts[2]}"
                 else:
                     today = datetime.today().strftime("%d-%m-%Y")
@@ -640,9 +642,18 @@ class PSDDateUpdater(PSDUpdaterWindow):
                 ):
                     date_part = lines[0].replace("-", "/")
                     time_part = lines[1].replace(":", ".")
-                    self.custom_date.set(date_part)
+                    
+                    # Convert old date format to new month name format for display
+                    from .psd_updater.models import format_date_with_month_name
+                    formatted_date = format_date_with_month_name(date_part)
+                    
+                    # Store in old format for processing compatibility, but display new format
+                    self.custom_date.set(date_part)  # Keep for processing
                     self.custom_time.set(time_part)
                     self.location_text.delete("1.0", tk.END)
+                    
+                    # Show user the new format that will be used
+                    self.results_text.insert(tk.END, f"  Will be updated to: {formatted_date} {time_part}\n")
 
                 # Handle old new format (date time on first line, locations follow)
                 elif (
@@ -654,7 +665,12 @@ class PSDDateUpdater(PSDUpdaterWindow):
                     if len(date_time) == 2:
                         date_part = date_time[0].replace("-", "/")
                         time_part = date_time[1].replace(":", ".")
-                        self.custom_date.set(date_part)
+                        
+                        # Convert old date format to new month name format for display
+                        from .psd_updater.models import format_date_with_month_name
+                        formatted_date = format_date_with_month_name(date_part)
+                        
+                        self.custom_date.set(date_part)  # Keep for processing
                         self.custom_time.set(time_part)
 
                         # Set location info if present
@@ -665,6 +681,9 @@ class PSDDateUpdater(PSDUpdaterWindow):
                                 self.location_text.insert(
                                     "1.0", "\n".join(location_info.as_list)
                                 )
+                        
+                        # Show user the new format that will be used
+                        self.results_text.insert(tk.END, f"  Will be updated to: {formatted_date} {time_part}\n")
 
             # Display properties
             for prop in ["font", "size", "justification"]:
