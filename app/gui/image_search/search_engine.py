@@ -38,6 +38,8 @@ class SearchEngine:
         hash_type: str,
         stop_on_first: bool,
         result_queue: Queue,
+        use_crop_resistant: bool = False,
+        crop_method: str = "combined",
     ):
         """Initialize the search engine.
 
@@ -48,6 +50,8 @@ class SearchEngine:
             hash_type: Type of hash to use ('phash' or 'ahash')
             stop_on_first: Whether to stop after finding first match
             result_queue: Queue for progress and result updates
+            use_crop_resistant: Whether to use advanced crop-resistant matching
+            crop_method: Method for crop-resistant matching ('sift', 'template', 'histogram', 'combined')
         """
         self.reference_path = reference_path
         self.search_dir = search_dir
@@ -55,6 +59,8 @@ class SearchEngine:
         self.hash_type = hash_type
         self.stop_on_first = stop_on_first
         self.result_queue = result_queue
+        self.use_crop_resistant = use_crop_resistant
+        self.crop_method = crop_method
         self.is_searching = True
         self.processor = ImageProcessor()
 
@@ -63,21 +69,33 @@ class SearchEngine:
         try:
             # Process reference image
             self.result_queue.put(("status", "Processing reference image..."))
-            ref_hash = self.processor.calculate_hash(
-                self.reference_path, self.hash_type
-            )
+            
+            if self.use_crop_resistant:
+                self.result_queue.put(
+                    (
+                        "result",
+                        f"Using crop-resistant matching ({self.crop_method}), minimum similarity threshold: {self.threshold}%\n\n",
+                    )
+                )
+            else:
+                ref_hash = self.processor.calculate_hash(
+                    self.reference_path, self.hash_type
+                )
+                self.result_queue.put(
+                    (
+                        "result",
+                        f"Using {self.hash_type}, minimum similarity threshold: {self.threshold}%\n\n",
+                    )
+                )
 
             # Start parallel search
             self.result_queue.put(("status", "Searching for similar images..."))
-            self.result_queue.put(
-                (
-                    "result",
-                    f"Using {self.hash_type}, minimum similarity threshold: {self.threshold}%\n\n",
-                )
-            )
 
             image_files = list(self._collect_image_files())
-            self._parallel_search(ref_hash, image_files)
+            if self.use_crop_resistant:
+                self._parallel_crop_resistant_search(image_files)
+            else:
+                self._parallel_search(ref_hash, image_files)
 
         except ImageProcessingError as e:
             logger.error("Image processing error: %s", str(e))
@@ -131,6 +149,65 @@ class SearchEngine:
 
         # Process images in parallel batches
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+            futures = []
+            current_batch = []
+
+            # Create batches of images
+            for img_path in image_files:
+                current_batch.append(img_path)
+                total_processed += 1
+
+                if len(current_batch) >= batch_size:
+                    futures.append(executor.submit(process_batch, current_batch[:]))
+                    current_batch = []
+
+            # Process remaining images
+            if current_batch:
+                futures.append(executor.submit(process_batch, current_batch))
+
+            # Collect results as they complete
+            for future in as_completed(futures):
+                matches = future.result()
+                similar_images.extend(matches)
+
+                if self.stop_on_first and similar_images:
+                    self.is_searching = False
+                    break
+
+                if not self.is_searching:
+                    break
+
+        # Always report results, even if search was stopped
+        self._report_results(similar_images, total_processed)
+
+    def _parallel_crop_resistant_search(self, image_files: List[str]) -> None:
+        """Execute crop-resistant search in parallel using thread pool."""
+        similar_images = []
+        total_processed = 0
+        batch_size = 50  # Smaller batches for more intensive processing
+
+        def process_batch(file_batch):
+            batch_results = []
+            for img_path in file_batch:
+                if not self.is_searching:
+                    break
+                try:
+                    self.result_queue.put(
+                        ("status", f"Processing: {os.path.basename(img_path)}")
+                    )
+                    similarity = self.processor.calculate_crop_resistant_similarity(
+                        self.reference_path, img_path, self.crop_method
+                    )
+                    if similarity >= self.threshold:
+                        batch_results.append((img_path, similarity))
+                        if self.stop_on_first:
+                            break
+                except ImageProcessingError as e:
+                    logger.warning("Failed to process %s: %s", img_path, str(e))
+            return batch_results
+
+        # Process images in parallel batches
+        with ThreadPoolExecutor(max_workers=min(4, os.cpu_count())) as executor:  # Limit workers for intensive processing
             futures = []
             current_batch = []
 

@@ -35,6 +35,10 @@ class ImageSearchApp:
             {"start_search": self.start_search, "cancel_search": self.cancel_search},
         )
 
+        # Configure grid weights for responsive resizing
+        parent.grid_rowconfigure(7, weight=1)  # Results area should expand
+        parent.grid_columnconfigure(1, weight=1)  # Middle column should expand
+
         # Setup periodic UI update
         self.parent.after(100, self.check_queue)
 
@@ -120,6 +124,8 @@ class ImageSearchApp:
             hash_type=self.search_controls.hash_type.get(),
             stop_on_first=self.search_controls.stop_on_first_match.get(),
             result_queue=self.result_queue,
+            use_crop_resistant=self.search_controls.use_crop_resistant.get(),
+            crop_method=self.search_controls.crop_method.get(),
         )
 
         search_engine.search()
