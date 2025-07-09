@@ -46,12 +46,6 @@
   district: Bekasi
   province: Jawa Barat
   company: Bumi Indah Putra
-- street: Jalan Dwi Warna
-  ward: Kel. Kartini
-  subdistrict: Kec. Sawah Besar
-  district: Kota Jakarta Pusat
-  province: Provinsi DKI Jakarta
-  company: Hasema Phillip
 - street: Jalan Raya By Pass Jomin
   ward: Kp. Simpang, Ds. Jomin Barat
   subdistrict: Kec. Kota Baru
@@ -82,3 +76,15 @@
   district: Bekasi
   province: Jawa Barat
   company: Amtekindo Teknologi Fabrikasi
+- street: Kp. Curug Deng Deng
+  ward: Desa Lutut
+  subdistrict: Gunung Putri
+  district: Bogor 16875
+  province: Jawa Barat
+  company: Hasema Phillip
+- street: Jl. Lap. Kobra
+  ward: Tambun
+  subdistrict: Kec. Tambun Selatan
+  district: Kab. Bekasi
+  province: Jawa Barat 17510
+  company: Niaga Jaya Teknik
