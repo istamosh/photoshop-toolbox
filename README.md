@@ -15,6 +15,7 @@ pip install uv
 ```bash
 uv venv
 .venv\Scripts\activate  # On Windows
+source .venv\Scripts\activate # On Windows with git cli
 ```
 
 3. Install dependencies:
