@@ -32,7 +32,11 @@ Coming soon...
 
 ## Features
 
-- Local image database
 - Fast image similarity search
 - Support for various image formats
-- Coming soon...
+- Batch processing
+- Timestamping
+
+## Important Note
+
+Set your rulers unit to pixels unit (px), and text unit to points (pt).
