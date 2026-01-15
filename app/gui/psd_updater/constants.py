@@ -19,9 +19,9 @@ class Justification(Enum):
 class TextSizing:
     """Text sizing constants."""
 
-    TEXT_SIZE_RATIO = 0.02583  # 2.58% of smaller dimension (31pt for 1200px)
+    TEXT_SIZE_RATIO = 0.03  # 3% of smaller dimension (31pt for 1200px)
     LEADING_RATIO = 1.129  # 112.9% of text size (35pt for 31pt font)
-    PADDING_RATIO = 0.03  # 3% of smaller dimension
+    PADDING_RATIO = 0.01  # 1% of smaller dimension
 
 
 class DateTimeFormats:
@@ -34,12 +34,12 @@ class DateTimeFormats:
     
     # Month names mapping
     MONTH_NAMES = {
-        1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
-        5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus", 
-        9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+        1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr",
+        5: "Mei", 6: "Jun", 7: "Jul", 8: "Agu", 
+        9: "Sep", 10: "Okt", 11: "Nov", 12: "Des"
     }
 
 class Secondhand:
     """Declaring the gap time between batch photos"""
-    MIN = 10
-    MAX = 15
+    MIN = 30
+    MAX = 120

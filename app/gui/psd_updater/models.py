@@ -36,7 +36,7 @@ class TimeInfo:
     @property
     def formatted(self) -> str:
         """Get formatted time string."""
-        return f"{self.hour:02d}.{self.minute:02d}.{self.second:02d}"
+        return f"{self.hour:02d}:{self.minute:02d}:{self.second:02d} WIB"
 
     @classmethod
     def from_string(cls, time_str: str) -> "TimeInfo":
