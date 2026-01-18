@@ -19,7 +19,7 @@ class Justification(Enum):
 class TextSizing:
     """Text sizing constants."""
 
-    TEXT_SIZE_RATIO = 0.03  # 3% of smaller dimension (31pt for 1200px)
+    TEXT_SIZE_RATIO = 0.05  # 5% of smaller dimension (31pt for 1200px)
     LEADING_RATIO = 1.129  # 112.9% of text size (35pt for 31pt font)
     PADDING_RATIO = 0.01  # 1% of smaller dimension
 
