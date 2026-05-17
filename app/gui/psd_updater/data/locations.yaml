@@ -82,12 +82,6 @@
   district: Kab. Bekasi
   province: Jawa Barat 17510
   company: Niaga Jaya Teknik
-- street: Jl. Gang Buntu Polsek RT 02/02
-  ward: Desa Cikarang Kota
-  subdistrict: Kec. Cikarang Utara
-  district: Kab. Bekasi
-  province: Jawa Barat
-  company: Teja Mandiri
 - street: Jl Galuh Mas Ruko Casabella No.3-5
   ward: Desa Sukaharja
   subdistrict: Teluk Jambe
@@ -142,9 +136,27 @@
   district: Kabupaten Bogor
   province: Jawa Barat
   company: PT. Beladi Cakra Persada
-- street: Jl. Raya Bogor Blok Central No. 47
+- street: Jl. Gg Buntu Polsek RT02/02
+  ward: Cikarang Kota
+  subdistrict: Cikarang Utara
+  district: Bekasi
+  province: Jawa Barat
+  company: Teja Mandiri 2
+- street: Galuh Mas Ruko Casabella No.3-5
+  ward: Ds Sukaharja
+  subdistrict: Tl Jambe
+  district: Karawang
+  province: Jawa Barat
+  company: Sarana Abadi Jaya Raya 2
+- street: Jl. Raya Bogor Bl. Central No.47
   ward: Ciriung
   subdistrict: Cibinong
   district: Bogor
-  province: Jawa Barat, 16918
-  company: PT. Sribaru Indah
+  province: Jawa Barat
+  company: PT. Sribaru Indah 2
+- street: Jl. KH. Moh. Sholeh
+  ward: Pasir Jambu
+  subdistrict: Kec Sukaraja
+  district: Kab Bogor
+  province: Jawa Barat
+  company: CV. Bankun Usaha Mandiri 2
