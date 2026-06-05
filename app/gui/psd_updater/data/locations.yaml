@@ -46,12 +46,6 @@
   district: Bekasi
   province: Jawa Barat
   company: Bumi Indah Putra
-- street: Jalan Raya By Pass Jomin
-  ward: Kp. Simpang, Ds. Jomin Barat
-  subdistrict: Kec. Kota Baru
-  district: Kab. Karawang
-  province: Jawa Barat
-  company: Prima Usaha Mitra Abadi
 - street: Jl. Raya Kosambi
   ward: Pancawati
   subdistrict: Klari
@@ -160,3 +154,15 @@
   district: Kab Bogor
   province: Jawa Barat
   company: CV. Bankun Usaha Mandiri 2
+- street: Jl Cinangka Raya No 23
+  ward: Cinangka
+  subdistrict: Bungursari
+  district: Purwakarta
+  province: Jawa Barat
+  company: Masana Putra
+- street: Jl Raya Bypass Jomin
+  ward: Kp Simpang
+  subdistrict: Kota Baru
+  district: Karawang
+  province: Jawa Barat
+  company: Prima Usaha Mitra Abadi 2
